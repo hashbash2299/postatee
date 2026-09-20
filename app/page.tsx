@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react";
-import { Search, Home, Video, Store, Users2, Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Video as VideoIcon, Smile, Crown, ShieldCheck, Star, CheckCircle2, ArrowRight, Plus } from "lucide-react";
+import { Search, Home, Video, Store, Users2, Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Video as VideoIcon, Smile, Crown, ShieldCheck, Star, CheckCircle2, ArrowRight, Plus, Bell } from "lucide-react";
 
 const RoleBadge = ({ role }: { role: string }) => {
   if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
@@ -13,6 +13,8 @@ export default function PostateeApp() {
   const [view, setView] = useState<"feed" | "profile">("feed");
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [newPost, setNewPost] = useState("");
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   const users: any = {
     postatee: { id:"postatee", name:"Postatee", role:"مالك", avatar:"/logo.png", cover:"https://picsum.photos/1000/300?random=99", bio:"المنصة السودانية الأولى 🖤💎", followers:"10K", verified:true },
@@ -69,7 +71,52 @@ export default function PostateeApp() {
         <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10 px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2"><img src="/logo.png" className="w-9 h-9 rounded-xl bg-white/5 p-1 border border-cyan-400/20"/><span className="font-black text-xl">Postatee</span></div>
           <div className="hidden md:flex flex-1 max-w-xs mx-4 relative"><Search className="absolute right-3 top-2.5 w-4 h-4 text-white/30"/><input placeholder="ابحث في بوستاتي" className="w-full bg-white/5 border border-white/10 rounded-full pr-10 pl-4 py-2 text-sm outline-none"/></div>
-          <div className="flex items-center gap-3"><Home className="w-6 h-6 text-cyan-400"/><Video className="w-6 h-6 text-white/40"/><Store className="w-6 h-6 text-white/40"/><Users2 className="w-6 h-6 text-white/40"/></div>
+
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="flex items-center gap-3 border-l border-white/10 pl-3 ml-1">
+              <Home className="w-6 h-6 text-cyan-400 cursor-pointer"/>
+              <Video className="w-6 h-6 text-white/40 hover:text-white/80 cursor-pointer"/>
+              <Store className="w-6 h-6 text-white/40 hover:text-white/80 cursor-pointer"/>
+              <Users2 className="w-6 h-6 text-white/40 hover:text-white/80 cursor-pointer"/>
+            </div>
+
+            {/* زر الاشعارات والدردشة الجديد */}
+            <div className="flex items-center gap-2 relative">
+              <button onClick={()=>{setShowNotifs(!showNotifs); setShowChat(false)}} className="relative w-9 h-9 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/10 flex items-center justify-center transition">
+                <Bell className="w-5 h-5"/>
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[11px] font-black rounded-full flex items-center justify-center border-2 border-[#050a0a]">3</span>
+              </button>
+              <button onClick={()=>{setShowChat(!showChat); setShowNotifs(false)}} className="relative w-9 h-9 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/10 flex items-center justify-center transition">
+                <MessageCircle className="w-5 h-5"/>
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#050a0a]"></span>
+              </button>
+              <img src={users.hashem.avatar} className="w-9 h-9 rounded-full border border-white/20 mr-1 hidden md:block"/>
+
+              {showNotifs && (
+                <div className="absolute top-12 left-0 w-80 bg-[#121818] border border-white/10 rounded-2xl shadow-2xl p-3 z-[60]">
+                  <h3 className="font-bold mb-3">الإشعارات</h3>
+                  <div className="space-y-2">
+                    <div className="p-2.5 rounded-xl bg-white/5 flex gap-2 items-center"><img src={users.bayan.avatar} className="w-8 h-8 rounded-full"/><p className="text-[13px]">بيان تفاعلت مع منشورك ❤️</p></div>
+                    <div className="p-2.5 rounded-xl bg-white/5 flex gap-2 items-center"><img src={users.ahmed.avatar} className="w-8 h-8 rounded-full"/><p className="text-[13px]">أحمد بدأ بمتابعتك</p></div>
+                    <div className="p-2.5 rounded-xl bg-white/5 flex gap-2 items-center"><img src={users.postatee.avatar} className="w-8 h-8 rounded-full"/><p className="text-[13px]">مرحبا بك في Postatee! 💎</p></div>
+                  </div>
+                </div>
+              )}
+              {showChat && (
+                <div className="absolute top-12 left-0 w-80 bg-[#121818] border border-white/10 rounded-2xl shadow-2xl p-3 z-[60]">
+                  <h3 className="font-bold mb-3">الدردشة</h3>
+                  <div className="space-y-1">
+                    {contacts.map((c:any)=>(
+                      <div key={c.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer">
+                        <div className="relative"><img src={c.avatar} className="w-9 h-9 rounded-full"/><span className="absolute -bottom-0.5 -left-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#121818]"></span></div>
+                        <div><p className="text-sm font-bold">{c.name}</p><p className="text-[11px] text-white/40">متصل الآن</p></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
         <div className="max-w-[1300px] mx-auto flex gap-4 p-3">
@@ -80,7 +127,6 @@ export default function PostateeApp() {
           </div>
 
           <div className="flex-1 max-w-[600px] mx-auto space-y-3">
-            {/* استوريهات */}
             <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 flex gap-3 overflow-x-auto">
               <div className="min-w-[110px] h-[170px] bg-gradient-to-b from-cyan-400/20 to-black/40 border border-cyan-400/20 rounded-xl flex flex-col items-center justify-end p-2 relative"><div className="absolute top-2 w-8 h-8 bg-cyan-400 rounded-full flex items-center justify-center text-black"><Plus className="w-5 h-5"/></div><span className="text-xs font-bold">إنشاء ستوري</span></div>
               {stories.map((s:any)=>(
@@ -88,7 +134,6 @@ export default function PostateeApp() {
               ))}
             </div>
 
-            {/* إنشاء منشور - رجع */}
             <div className="bg-white/[0.04] backdrop-blur border border-white/10 rounded-2xl p-3">
               <div className="flex gap-3">
                 <img src={users.hashem.avatar} className="w-10 h-10 rounded-full"/>
