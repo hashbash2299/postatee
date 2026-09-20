@@ -1,14 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
-import { db } from "../lib/firebase";
+import { db } from "./lib/firebase";
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 export default function Home() {
   const [text, setText] = useState("");
   const [posts, setPosts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  // جلب البوستات لحظيا
   useEffect(() => {
     const q = query(collection(db, "posts"), orderBy("created_at", "desc"));
     const unsub = onSnapshot(q, (snap) => {
@@ -18,41 +16,21 @@ export default function Home() {
   }, []);
 
   const handlePost = async () => {
-    if (!text.trim()) return alert("اكتب حاجة أول");
-    setLoading(true);
-    try {
-      await addDoc(collection(db, "posts"), {
-        content: text,
-        created_at: serverTimestamp(),
-      });
-      setText("");
-      alert("تم النشر في Firebase ✅");
-    } catch (e: any) {
-      alert("خطأ: " + e.message);
-      console.error(e);
-    }
-    setLoading(false);
+    if (!text.trim()) return;
+    await addDoc(collection(db, "posts"), {
+      content: text,
+      created_at: serverTimestamp(),
+    });
+    setText("");
   };
 
   return (
-    <main style={{ maxWidth: 600, margin: "20px auto", padding: 20 }}>
-      <h1>postatee - Firebase</h1>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="بماذا تفكر؟"
-        style={{ width: "100%", height: 100, padding: 10 }}
-      />
-      <button onClick={handlePost} disabled={loading} style={{ marginTop: 10, padding: "10px 20px" }}>
-        {loading ? "جاري النشر..." : "نشر"}
-      </button>
-
-      <hr style={{ margin: "20px 0" }} />
-      {posts.map((p) => (
-        <div key={p.id} style={{ border: "1px solid #ddd", padding: 10, marginBottom: 10, borderRadius: 8 }}>
-          {p.content}
-        </div>
-      ))}
+    <main style={{ maxWidth: 600, margin: "20px auto", padding: 20, fontFamily: "sans-serif" }}>
+      <h1>postatee - شغال 🔥</h1>
+      <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="بماذا تفكر؟" style={{width:"100%", height:100, padding:10}} />
+      <button onClick={handlePost} style={{marginTop:10, padding:"10px 20px", background:"black", color:"white", borderRadius:8}}>نشر</button>
+      <hr style={{margin:"20px 0"}}/>
+      {posts.map(p=> <div key={p.id} style={{border:"1px solid #ddd", padding:12, marginBottom:10, borderRadius:8}}>{p.content}</div>)}
     </main>
   );
 }
