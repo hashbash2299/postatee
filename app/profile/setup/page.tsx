@@ -36,7 +36,7 @@ export default function SetupProfile() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { router.push('/login'); return; }
-      setUid(u.id || u.uid);
+      setUid(u.uid || u.uid);
       const snap = await getDoc(doc(db, 'users', u.uid));
       if (snap.exists() && snap.data().profileCompleted) {
         // لو مكمل بروفايلو يمشي للرئيسية
