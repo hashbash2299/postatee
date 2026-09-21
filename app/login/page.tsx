@@ -1,29 +1,47 @@
-"use client"
-import { useState } from "react";
-import Link from "next/link";
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { signInWithEmailAndPassword } from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
 
 export default function LoginPage() {
-  const [method, setMethod] = useState<"email"|"phone">("email");
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+
+  const handleLogin = async (e: any) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password)
+      
+      // نشوف هل كمل البروفايل ولا لا
+      const snap = await getDoc(doc(db, 'users', cred.user.uid))
+      if (snap.exists() && !snap.data().profileCompleted) {
+        router.push('/profile/setup')
+      } else {
+        router.push('/feed')
+      }
+
+    } catch (err: any) {
+      alert('خطأ في الإيميل أو كلمة السر')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="min-h-screen flex bg-[#081a1a]" dir="rtl">
-      <div className="hidden lg:flex w-1/2 p-10 bg-[#0a2020] flex-col justify-between">
-        <span className="text-white font-black text-xl">Postatee 💎</span>
-        <h1 className="text-5xl font-black text-white">أول منصة<br/><span className="text-cyan-300">سودانية</span></h1>
-        <span className="text-white/20 text-xs">© Postatee</span>
-      </div>
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 bg-[#0d2d2d]">
-        <div className="w-full max-w-[400px] bg-white/[0.07] border border-white/10 rounded-[28px] p-7 space-y-4">
-          <h2 className="text-xl font-black text-white text-center">تسجيل الدخول</h2>
-          <div className="bg-black/40 rounded-full p-1 flex">
-            <button onClick={()=>setMethod("phone")} className={`flex-1 py-2 rounded-full text-sm ${method==="phone"?"bg-white text-black font-bold":"text-white/50"}`}>برقم الجوال</button>
-            <button onClick={()=>setMethod("email")} className={`flex-1 py-2 rounded-full text-sm ${method==="email"?"bg-white text-black font-bold":"text-white/50"}`}>بالإيميل</button>
-          </div>
-          <input placeholder="example@email.com" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none" />
-          <input type="password" placeholder="كلمة المرور" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none" />
-          <button className="w-full bg-[#8ef0d5] text-black font-black py-3.5 rounded-xl">دخول</button>
-          <p className="text-center text-xs text-white/50">ما عندك حساب؟ <Link href="/register" className="text-cyan-300 font-bold">إنشاء حساب جديد</Link></p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
+      <form onSubmit={handleLogin} className="w-full max-w-sm bg-zinc-900 p-8 rounded-3xl">
+        <h1 className="text-2xl font-bold mb-6">تسجيل الدخول</h1>
+        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="الإيميل" className="w-full p-3 mb-3 rounded-xl bg-black border border-zinc-700" />
+        <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="كلمة السر" className="w-full p-3 mb-5 rounded-xl bg-black border border-zinc-700" />
+        <button disabled={loading} className="w-full bg-white text-black py-3 rounded-full font-bold">
+          {loading ? 'جاري الدخول...' : 'دخول'}
+        </button>
+      </form>
     </div>
   )
 }
