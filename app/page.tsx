@@ -27,7 +27,7 @@ export default function PostateeApp() {
       if (snap.exists()) {
         const data = snap.data();
         if (!data.profileCompleted) { router.push('/profile/setup'); return; }
-        setCurrentUser(data);
+        setCurrentUser({...data, uid: u.uid }); // مهم نضيف uid
       }
       setLoading(false);
     });
@@ -51,6 +51,7 @@ export default function PostateeApp() {
     await addDoc(collection(db, "posts"), {
       content, image, created_at: serverTimestamp(),
       uid: auth.currentUser?.uid,
+      authorId: auth.currentUser?.uid, // عشان الحائط يشتغل
       authorName: currentUser?.displayName,
       authorUsername: currentUser?.username,
       authorAvatar: currentUser?.avatar || ""
@@ -75,14 +76,27 @@ export default function PostateeApp() {
             <Home className="w-5 h-5 text-cyan-400"/>
             <Bell className="w-5 h-5 text-white/60"/>
             <MessageSquare className="w-5 h-5 text-white/60"/>
-            <img src={currentUser?.avatar || `https://i.pravatar.cc/100?u=${currentUser?.username}`} onClick={()=>router.push('/profile/setup')} className="w-8 h-8 rounded-full border border-cyan-400/30 cursor-pointer"/>
+            {/* هنا التعديل - يوديك للحائط بتاعك مباشرة */}
+            <img
+              src={currentUser?.avatar || `https://i.pravatar.cc/100?u=${currentUser?.username}`}
+              onClick={()=>router.push(`/profile/${currentUser?.uid}`)}
+              className="w-8 h-8 rounded-full border border-cyan-400/30 cursor-pointer hover:opacity-80"
+              title="حائطي"
+            />
             <button onClick={handleLogout} className="w-8 h-8 rounded-full bg-white/5 hover:bg-red-500/20 border border-white/10 flex items-center justify-center text-white/70 hover:text-red-400"><LogOut className="w-4 h-4"/></button>
           </div>
         </header>
 
         <div className="max-w-[600px] mx-auto p-3 space-y-3">
           <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3">
-            <div className="flex gap-3"><img src={currentUser?.avatar || `https://i.pravatar.cc/100?u=${currentUser?.username}`} className="w-10 h-10 rounded-full"/><input value={text} onChange={e=>setText(e.target.value)} placeholder={`بماذا تفكر يا ${currentUser?.displayName || ''}؟`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2.5 text-sm outline-none"/></div>
+            <div className="flex gap-3">
+              <img
+                src={currentUser?.avatar || `https://i.pravatar.cc/100?u=${currentUser?.username}`}
+                onClick={()=>router.push(`/profile/${currentUser?.uid}`)}
+                className="w-10 h-10 rounded-full cursor-pointer"
+              />
+              <input value={text} onChange={e=>setText(e.target.value)} placeholder={`بماذا تفكر يا ${currentUser?.displayName || ''}؟`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2.5 text-sm outline-none"/>
+            </div>
             <div className="flex justify-between mt-3 pt-3 border-t border-white/5">
               <div className="flex gap-4">
                 <button onClick={()=>handlePost("image")} className="flex items-center gap-1.5 text-sm text-green-400"><ImageIcon className="w-5 h-5"/> صورة</button>
@@ -96,7 +110,18 @@ export default function PostateeApp() {
 
           {posts.map((post:any)=>(
             <div key={post.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
-              <div className="flex justify-between"><div className="flex gap-3"><img src={post.authorAvatar || `https://i.pravatar.cc/100?u=${post.uid}`} className="w-10 h-10 rounded-full border border-cyan-400/20"/><div><div className="flex items-center gap-2"><span className="font-bold text-sm">{post.authorName}</span>{post.authorUsername === 'postatee' && <RoleBadge role="مالك"/>}<CheckCircle2 className="w-4 h-4 text-cyan-400"/></div><span className="text-xs text-white/40">الآن</span></div></div><MoreHorizontal className="w-5 h-5 text-white/30"/></div>
+              <div className="flex justify-between">
+                <div className="flex gap-3">
+                  {/* هنا التعديل المهم - ضغطة تودي الحائط */}
+                  <img
+                    src={post.authorAvatar || `https://i.pravatar.cc/100?u=${post.uid}`}
+                    onClick={()=>router.push(`/profile/${post.authorId || post.uid}`)}
+                    className="w-10 h-10 rounded-full border border-cyan-400/20 cursor-pointer hover:brightness-110 transition"
+                  />
+                  <div><div className="flex items-center gap-2"><span className="font-bold text-sm">{post.authorName}</span>{post.authorUsername === 'postatee' && <RoleBadge role="مالك"/>}<CheckCircle2 className="w-4 h-4 text-cyan-400"/></div><span className="text-xs text-white/40">الآن</span></div>
+                </div>
+                <MoreHorizontal className="w-5 h-5 text-white/30"/>
+              </div>
               <p className="mt-3 text-[15px] whitespace-pre-wrap">{post.content}</p>
               {post.image && <img src={post.image} className="mt-3 rounded-xl w-full"/>}
               <div className="flex justify-between mt-4 pt-3 border-t border-white/5">
