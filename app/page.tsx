@@ -2,9 +2,9 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "./lib/firebase";
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { Search, Home, Heart, MessageCircle, Share2, MoreHorizontal, Crown, ShieldCheck, Star, CheckCircle2, ArrowRight, Plus, Image as ImageIcon, Video as VideoIcon, Send, Bell, MessageSquare } from "lucide-react";
+import { Search, Home, Heart, MessageCircle, Share2, MoreHorizontal, Crown, ShieldCheck, Star, CheckCircle2, ArrowRight, Plus, Image as ImageIcon, Video as VideoIcon, Send, Bell, MessageSquare, LogOut } from "lucide-react";
 
 const RoleBadge = ({ role }: { role: string }) => {
   if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
@@ -58,6 +58,11 @@ export default function PostateeApp() {
     setText("");
   };
 
+  const handleLogout = async () => {
+    await signOut(auth);
+    router.push('/login');
+  };
+
   if (loading) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-cyan-400">جاري التحميل...</div>;
 
   return (
@@ -66,11 +71,12 @@ export default function PostateeApp() {
       <div className="min-h-screen bg-[#050a0a] text-white" dir="rtl">
         <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10 px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2"><img src="/logo.png" className="w-9 h-9 rounded-xl bg-white/5 p-1 border border-cyan-400/20"/><span className="font-black text-xl">Postatee</span></div>
-          <div className="flex items-center gap-4">
-            <Home className="w-6 h-6 text-cyan-400"/>
-            <Bell className="w-6 h-6 text-white/70"/>
-            <MessageSquare className="w-6 h-6 text-white/70"/>
+          <div className="flex items-center gap-3">
+            <Home className="w-5 h-5 text-cyan-400"/>
+            <Bell className="w-5 h-5 text-white/60"/>
+            <MessageSquare className="w-5 h-5 text-white/60"/>
             <img src={currentUser?.avatar || `https://i.pravatar.cc/100?u=${currentUser?.username}`} onClick={()=>router.push('/profile/setup')} className="w-8 h-8 rounded-full border border-cyan-400/30 cursor-pointer"/>
+            <button onClick={handleLogout} className="w-8 h-8 rounded-full bg-white/5 hover:bg-red-500/20 border border-white/10 flex items-center justify-center text-white/70 hover:text-red-400"><LogOut className="w-4 h-4"/></button>
           </div>
         </header>
 
@@ -86,11 +92,11 @@ export default function PostateeApp() {
             </div>
           </div>
 
-          {posts.length === 0 && <div className="text-center text-white/40 py-10">لا توجد منشورات بعد - كن أول من ينشر! 💎</div>}
+          {posts.length === 0 && <div className="text-center text-white/40 py-12 border border-dashed border-white/10 rounded-2xl">لا توجد منشورات بعد - كن أول من ينشر! 💎</div>}
 
           {posts.map((post:any)=>(
             <div key={post.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
-              <div className="flex justify-between"><div className="flex gap-3"><img src={post.authorAvatar || `https://i.pravatar.cc/100?u=${post.uid}`} className="w-10 h-10 rounded-full border border-cyan-400/20"/><div><div className="flex items-center gap-2"><span className="font-bold text-sm">{post.authorName || currentUser?.displayName}</span>{post.authorUsername === 'postatee' && <RoleBadge role="مالك"/>}<CheckCircle2 className="w-4 h-4 text-cyan-400"/></div><span className="text-xs text-white/40">الآن</span></div></div><MoreHorizontal className="w-5 h-5 text-white/30"/></div>
+              <div className="flex justify-between"><div className="flex gap-3"><img src={post.authorAvatar || `https://i.pravatar.cc/100?u=${post.uid}`} className="w-10 h-10 rounded-full border border-cyan-400/20"/><div><div className="flex items-center gap-2"><span className="font-bold text-sm">{post.authorName}</span>{post.authorUsername === 'postatee' && <RoleBadge role="مالك"/>}<CheckCircle2 className="w-4 h-4 text-cyan-400"/></div><span className="text-xs text-white/40">الآن</span></div></div><MoreHorizontal className="w-5 h-5 text-white/30"/></div>
               <p className="mt-3 text-[15px] whitespace-pre-wrap">{post.content}</p>
               {post.image && <img src={post.image} className="mt-3 rounded-xl w-full"/>}
               <div className="flex justify-between mt-4 pt-3 border-t border-white/5">
