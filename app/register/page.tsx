@@ -41,7 +41,7 @@ export default function RegisterPage() {
         createdAt: serverTimestamp()
       })
 
-      router.push('/profile/setup')
+      router.push('/')
 
     } catch (err: any) {
       alert(err.message)

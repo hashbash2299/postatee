@@ -32,7 +32,7 @@ export default function SetupProfile() {
       bio,
       profileCompleted: true
     })
-    router.push('/feed')
+    router.push('/')
   }
 
   if (loading) return <div className="p-10 text-center">...</div>
