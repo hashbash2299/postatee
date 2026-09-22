@@ -1,10 +1,10 @@
 "use client"
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db, auth } from "./lib/firebase";
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment, where, writeBatch } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { Search, Home, Heart, MessageCircle, Share2, MoreHorizontal, Crown, ShieldCheck, Star, CheckCircle2, ArrowRight, Plus, Image as ImageIcon, Video as VideoIcon, Send, Bell, MessageSquare, LogOut } from "lucide-react";
+import { Search, Home, Heart, MessageCircle, Share2, MoreHorizontal, Crown, ShieldCheck, Star, CheckCircle2, ArrowRight, Plus, Image as ImageIcon, Video as VideoIcon, Send, Bell, MessageSquare, LogOut, X } from "lucide-react";
 
 const timeAgo = (ts:any) => {
   if(!ts?.seconds) return "الآن";
@@ -54,6 +54,9 @@ export default function PostateeApp() {
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState<{[key:string]:string}>({});
   const [openComments, setOpenComments] = useState<{[key:string]:boolean}>({});
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotif, setShowNotif] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -79,6 +82,23 @@ export default function PostateeApp() {
     return () => unsub();
   }, []);
 
+  // الإشعارات - تايم لاين حقيقي
+  useEffect(() => {
+    if(!currentUser?.uid) return;
+    const q = query(collection(db, "notifications"), where("toUid","==",currentUser.uid), orderBy("created_at","desc"));
+    const unsub = onSnapshot(q, (snap)=>{
+      setNotifications(snap.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return () => unsub();
+  }, [currentUser]);
+
+  // قفل القائمة لما تضغط برة
+  useEffect(()=>{
+    const handleClick = (e:any)=>{ if(notifRef.current &&!notifRef.current.contains(e.target)) setShowNotif(false); };
+    document.addEventListener('mousedown', handleClick);
+    return ()=> document.removeEventListener('mousedown', handleClick);
+  },[]);
+
   const handlePost = async (type = "text") => {
     if (!text.trim() && type==="text") return;
     let content = text;
@@ -87,12 +107,9 @@ export default function PostateeApp() {
     if(type==="video") content = text + " 🎥 فيديو جديد";
     await addDoc(collection(db, "posts"), {
       content, image, created_at: serverTimestamp(),
-      uid: auth.currentUser?.uid,
-      authorId: auth.currentUser?.uid,
-      authorName: currentUser?.displayName,
-      authorUsername: currentUser?.username,
-      authorAvatar: currentUser?.avatar || "",
-      likes: [], likesCount: 0, commentsCount: 0
+      uid: auth.currentUser?.uid, authorId: auth.currentUser?.uid,
+      authorName: currentUser?.displayName, authorUsername: currentUser?.username,
+      authorAvatar: currentUser?.avatar || "", likes: [], likesCount: 0, commentsCount: 0
     });
     setText("");
   };
@@ -101,7 +118,16 @@ export default function PostateeApp() {
     const ref = doc(db, 'posts', post.id);
     const liked = post.likes?.includes(currentUser.uid);
     if(liked) await updateDoc(ref, { likes: arrayRemove(currentUser.uid), likesCount: increment(-1) });
-    else await updateDoc(ref, { likes: arrayUnion(currentUser.uid), likesCount: increment(1) });
+    else {
+      await updateDoc(ref, { likes: arrayUnion(currentUser.uid), likesCount: increment(1) });
+      if(post.authorId!== currentUser.uid){
+        await addDoc(collection(db, "notifications"), {
+          toUid: post.authorId || post.uid, fromUid: currentUser.uid, fromName: currentUser.displayName,
+          fromAvatar: currentUser.avatar, type: "like", postId: post.id, postContent: post.content?.slice(0,50),
+          read: false, created_at: serverTimestamp()
+        });
+      }
+    }
   };
 
   const handleComment = async (postId:string) => {
@@ -109,6 +135,27 @@ export default function PostateeApp() {
     await addDoc(collection(db, 'posts', postId, 'comments'), { text: txt, created_at: serverTimestamp(), uid: currentUser.uid, authorName: currentUser.displayName, authorAvatar: currentUser.avatar });
     await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(1) });
     setCommentText({...commentText, [postId]:""});
+    const post = posts.find(p=>p.id===postId);
+    if(post && (post.authorId||post.uid)!== currentUser.uid){
+      await addDoc(collection(db, "notifications"), {
+        toUid: post.authorId || post.uid, fromUid: currentUser.uid, fromName: currentUser.displayName,
+        fromAvatar: currentUser.avatar, type: "comment", postId: postId, postContent: txt.slice(0,50),
+        read: false, created_at: serverTimestamp()
+      });
+    }
+  };
+
+  const handleNotifClick = async (n:any) => {
+    await updateDoc(doc(db, "notifications", n.id), { read: true });
+    setShowNotif(false);
+    // يفتح المنشور تلقائيا
+    const el = document.getElementById(`post-${n.postId}`);
+    if(el){ el.scrollIntoView({behavior:"smooth", block:"center"}); el.classList.add("ring-2","ring-cyan-400"); setTimeout(()=>el.classList.remove("ring-2","ring-cyan-400"),2000); setOpenComments(prev=>({...prev,[n.postId]:true})); }
+  };
+
+  const markAllRead = async () => {
+    const batch = notifications.filter(n=>!n.read);
+    for(const n of batch) await updateDoc(doc(db,"notifications",n.id),{read:true});
   };
 
   const handleShare = async (post:any) => {
@@ -119,11 +166,11 @@ export default function PostateeApp() {
 
   const handleLogout = async () => {
     try{ await updateDoc(doc(db,'users',currentUser.uid),{isOnline:false, lastSeen:serverTimestamp()}); }catch{}
-    await signOut(auth);
-    router.push('/login');
+    await signOut(auth); router.push('/login');
   };
 
   if (loading) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-cyan-400">جاري التحميل...</div>;
+  const unreadCount = notifications.filter(n=>!n.read).length;
 
   return (
     <>
@@ -133,7 +180,34 @@ export default function PostateeApp() {
           <div className="flex items-center gap-2"><img src="/logo.png" className="w-9 h-9 rounded-xl bg-white/5 p-1 border border-cyan-400/20"/><span className="font-black text-xl">Postatee</span></div>
           <div className="flex items-center gap-3">
             <Home className="w-5 h-5 text-cyan-400"/>
-            <Bell className="w-5 h-5 text-white/60"/>
+            <div className="relative" ref={notifRef}>
+              <button onClick={()=>setShowNotif(!showNotif)} className="relative w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-white/70"/>
+                {unreadCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{unreadCount}</span>}
+              </button>
+              {showNotif && (
+                <div className="absolute left-0 mt-2 w-[340px] max-h-[420px] overflow-y-auto bg-[#0a1212] border border-white/10 rounded-2xl shadow-2xl z-50">
+                  <div className="flex justify-between items-center p-3 border-b border-white/5 sticky top-0 bg-[#0a1212]">
+                    <span className="font-bold text-sm">الإشعارات</span>
+                    <div className="flex gap-2">
+                      {unreadCount>0 && <button onClick={markAllRead} className="text-[11px] text-cyan-400">تعليم كمقروءة</button>}
+                      <button onClick={()=>setShowNotif(false)}><X className="w-4 h-4 text-white/40"/></button>
+                    </div>
+                  </div>
+                  {notifications.length===0 && <div className="p-8 text-center text-white/30 text-sm">لا توجد إشعارات</div>}
+                  {notifications.map(n=>(
+                    <div key={n.id} onClick={()=>handleNotifClick(n)} className={`flex gap-3 p-3 hover:bg-white/[0.04] cursor-pointer border-b border-white/[0.03] ${!n.read?'bg-cyan-400/[0.05]':''}`}>
+                      <img src={n.fromAvatar} className="w-9 h-9 rounded-full"/>
+                      <div className="flex-1">
+                        <p className="text-[13px] leading-4"><span className="font-bold">{n.fromName}</span> {n.type==='like'? 'أعجب بمنشورك':'علق على منشورك'} <span className="text-white/50">"{n.postContent}"</span></p>
+                        <p className="text-[11px] text-white/30 mt-1">{timeAgo(n.created_at)} {n.type==='like'? '❤️':'💬'}</p>
+                      </div>
+                      {!n.read && <div className="w-2 h-2 bg-cyan-400 rounded-full mt-2"/>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <MessageSquare className="w-5 h-5 text-white/60"/>
             <img src={currentUser?.avatar || `https://i.pravatar.cc/100?u=${currentUser?.username}`} onClick={()=>router.push(`/profile/${currentUser?.uid}`)} className="w-8 h-8 rounded-full border border-cyan-400/30 cursor-pointer hover:opacity-80" title="حائطي"/>
             <button onClick={handleLogout} className="w-8 h-8 rounded-full bg-white/5 hover:bg-red-500/20 border border-white/10 flex items-center justify-center text-white/70 hover:text-red-400"><LogOut className="w-4 h-4"/></button>
@@ -158,7 +232,7 @@ export default function PostateeApp() {
           {posts.length === 0 && <div className="text-center text-white/40 py-12 border border-dashed border-white/10 rounded-2xl">لا توجد منشورات بعد - كن أول من ينشر! 💎</div>}
 
           {posts.map((post:any)=>(
-            <div key={post.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+            <div id={`post-${post.id}`} key={post.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 transition-all">
               <div className="flex justify-between">
                 <div className="flex gap-3">
                   <img src={post.authorAvatar || `https://i.pravatar.cc/100?u=${post.uid}`} onClick={()=>router.push(`/profile/${post.authorId || post.uid}`)} className="w-10 h-10 rounded-full border border-cyan-400/20 cursor-pointer hover:brightness-110 transition"/>
