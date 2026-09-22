@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { auth, db } from "../lib/firebase";
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -12,19 +12,37 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const getErrorArabic = (code: string) => {
+    if(code.includes("invalid-email")) return "صيغة الإيميل غير صحيحة، اتأكد مافي مسافة";
+    if(code.includes("user-not-found")) return "المستخدم غير موجود";
+    if(code.includes("wrong-password")) return "كلمة السر غلط";
+    if(code.includes("too-many-requests")) return "محاولات كتيرة، انتظر دقيقة";
+    if(code.includes("network")) return "مشكلة في النت";
+    return code;
+  }
+
   const handleLogin = async (e: any) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      const snap = await getDoc(doc(db, 'users', cred.user.uid));
-      if (!snap.exists() ||!snap.data().profileCompleted) {
+      const emailClean = email.trim().toLowerCase(); // ده الحل لـ invalid-email
+      const cred = await signInWithEmailAndPassword(auth, emailClean, password);
+
+      // هنا كان بفشل بسبب الرولز القديمة
+      try {
+        const snap = await getDoc(doc(db, 'users', cred.user.uid));
+        if (!snap.exists() ||!snap.data().profileCompleted) {
+          router.push('/profile/setup');
+        } else {
+          router.push('/');
+        }
+      } catch {
+        // لو الدوكيومنت لسه ما اتعمل، وديهو يكمل بروفايلو
         router.push('/profile/setup');
-      } else {
-        router.push('/');
       }
+
     } catch (err: any) {
-      alert("خطأ في الدخول: " + err.message);
+      alert("خطأ في الدخول: " + getErrorArabic(err.code || err.message));
     }
     setLoading(false);
   };
@@ -34,13 +52,23 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider();
       const cred = await signInWithPopup(auth, provider);
       const snap = await getDoc(doc(db, 'users', cred.user.uid));
-      if (!snap.exists() ||!snap.data().profileCompleted) {
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'users', cred.user.uid), {
+          email: cred.user.email,
+          username: cred.user.displayName?.replace(/\s+/g,'_') || 'user_'+Date.now(),
+          displayName: cred.user.displayName || 'مستخدم',
+          avatar: cred.user.photoURL || `https://i.pravatar.cc/100?u=${cred.user.uid}`,
+          profileCompleted: false,
+          created_at: serverTimestamp()
+        });
+        router.push('/profile/setup');
+      } else if (!snap.data().profileCompleted) {
         router.push('/profile/setup');
       } else {
         router.push('/');
       }
     } catch (err: any) {
-      alert(err.message);
+      alert(getErrorArabic(err.code || err.message));
     }
   };
 
