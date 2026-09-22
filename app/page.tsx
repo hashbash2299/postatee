@@ -43,8 +43,17 @@ function CommentsList({ postId }: { postId: string }) {
 const RoleBadge = ({ role }: { role: string }) => {
   if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
   if (role === "مؤسس") return <span className="inline-flex items-center gap-1 bg-white/10 border border-cyan-400/30 text-cyan-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><ShieldCheck className="w-3 h-3"/> مؤسس</span>;
-  if (role === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-yellow-400 to-orange-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full"><Star className="w-3 h-3"/> هامة</span>;
+  if (role === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-red-500 to-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full"><Star className="w-3 h-3"/> هامة</span>;
+  if (role === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><CheckCircle2 className="w-3 h-3"/> موثق</span>;
   return null;
+};
+
+const getNameColor = (role:string) => {
+  if(role === "مؤسس") return "text-cyan-400";
+  if(role === "شخصية هامة") return "text-red-400";
+  if(role === "شارة خضراء") return "text-green-400";
+  if(role === "مالك") return "text-cyan-300";
+  return "text-white";
 };
 
 export default function PostateeApp() {
@@ -82,7 +91,6 @@ export default function PostateeApp() {
     return () => unsub();
   }, []);
 
-  // الإشعارات - تايم لاين حقيقي
   useEffect(() => {
     if(!currentUser?.uid) return;
     const q = query(collection(db, "notifications"), where("toUid","==",currentUser.uid), orderBy("created_at","desc"));
@@ -92,7 +100,6 @@ export default function PostateeApp() {
     return () => unsub();
   }, [currentUser]);
 
-  // قفل القائمة لما تضغط برة
   useEffect(()=>{
     const handleClick = (e:any)=>{ if(notifRef.current &&!notifRef.current.contains(e.target)) setShowNotif(false); };
     document.addEventListener('mousedown', handleClick);
@@ -109,7 +116,8 @@ export default function PostateeApp() {
       content, image, created_at: serverTimestamp(),
       uid: auth.currentUser?.uid, authorId: auth.currentUser?.uid,
       authorName: currentUser?.displayName, authorUsername: currentUser?.username,
-      authorAvatar: currentUser?.avatar || "", likes: [], likesCount: 0, commentsCount: 0
+      authorAvatar: currentUser?.avatar || "", authorRole: currentUser?.role || "",
+      likes: [], likesCount: 0, commentsCount: 0
     });
     setText("");
   };
@@ -148,7 +156,6 @@ export default function PostateeApp() {
   const handleNotifClick = async (n:any) => {
     await updateDoc(doc(db, "notifications", n.id), { read: true });
     setShowNotif(false);
-    // يفتح المنشور تلقائيا
     const el = document.getElementById(`post-${n.postId}`);
     if(el){ el.scrollIntoView({behavior:"smooth", block:"center"}); el.classList.add("ring-2","ring-cyan-400"); setTimeout(()=>el.classList.remove("ring-2","ring-cyan-400"),2000); setOpenComments(prev=>({...prev,[n.postId]:true})); }
   };
@@ -236,7 +243,14 @@ export default function PostateeApp() {
               <div className="flex justify-between">
                 <div className="flex gap-3">
                   <img src={post.authorAvatar || `https://i.pravatar.cc/100?u=${post.uid}`} onClick={()=>router.push(`/profile/${post.authorId || post.uid}`)} className="w-10 h-10 rounded-full border border-cyan-400/20 cursor-pointer hover:brightness-110 transition"/>
-                  <div><div className="flex items-center gap-2"><span className="font-bold text-sm">{post.authorName}</span>{post.authorUsername === 'postatee' && <RoleBadge role="مالك"/>}<CheckCircle2 className="w-4 h-4 text-cyan-400"/></div><span className="text-xs text-white/40">{timeAgo(post.created_at)}</span></div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-bold text-sm ${getNameColor(post.authorRole || (post.authorUsername==='postatee'?'مالك':''))}`}>{post.authorName}</span>
+                      <RoleBadge role={post.authorRole || (post.authorUsername==='postatee'?'مالك':'')}/>
+                      <CheckCircle2 className="w-4 h-4 text-cyan-400"/>
+                    </div>
+                    <span className="text-xs text-white/40">{timeAgo(post.created_at)}</span>
+                  </div>
                 </div>
                 <MoreHorizontal className="w-5 h-5 text-white/30"/>
               </div>
