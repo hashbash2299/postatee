@@ -1,10 +1,10 @@
 "use client"
 import { useState, useEffect } from "react";
 import { auth, db } from "../../lib/firebase";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { Camera, Check, Circle } from "lucide-react";
+import { Camera, Check, Circle, Crown, Gem, Star, Verified } from "lucide-react";
 
 const defaultAvatars = [
   "https://i.pravatar.cc/200?img=8",
@@ -24,6 +24,21 @@ const defaultCovers = [
   "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800",
 ];
 
+const getNameColor = (role:string) => {
+  if(role === "مؤسس") return "text-cyan-400";
+  if(role === "شخصية هامة") return "text-red-400";
+  if(role === "شارة خضراء") return "text-green-400";
+  if(role === "مالك") return "text-cyan-300";
+  return "text-white";
+};
+const RoleBadge = ({ role }: { role: string }) => {
+  if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
+  if (role === "مؤسس") return <span className="inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/50 text-cyan-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><Gem className="w-3 h-3"/> مؤسس</span>;
+  if (role === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full"><Star className="w-3 h-3 fill-red-400"/> هامة</span>;
+  if (role === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><Verified className="w-3 h-3"/> موثق</span>;
+  return null;
+};
+
 export default function SetupProfile() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -31,45 +46,71 @@ export default function SetupProfile() {
   const [cover, setCover] = useState(defaultCovers[0]);
   const [isOnline, setIsOnline] = useState(true);
   const [uid, setUid] = useState("");
+  const [existingData, setExistingData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { router.push('/login'); return; }
-      setUid(u.uid || u.uid);
+      setUid(u.uid);
       const snap = await getDoc(doc(db, 'users', u.uid));
-      if (snap.exists() && snap.data().profileCompleted) {
-        // لو مكمل بروفايلو يمشي للرئيسية
+      if (snap.exists()) {
+        const data = snap.data();
+        setExistingData(data);
+        // املأ البيانات القديمة لو موجودة
+        if(data.displayName) setDisplayName(data.displayName);
+        if(data.username) setUsername(data.username);
+        if(data.avatar) setAvatar(data.avatar);
+        if(data.cover) setCover(data.cover);
+        // لو مكمل قبل كده ما نوديه تاني، لكن نسمح له يعدل
+        if(data.profileCompleted &&!data.displayName) {
+          // skip
+        }
       }
+      setLoading(false);
     });
     return () => unsub();
-  }, []);
+  }, [router]);
 
   const handleSave = async () => {
-    if (!displayName ||!username) return alert("اكمل البيانات");
-    await setDoc(doc(db, 'users', uid), {
-      uid,
-      displayName,
-      username: username.toLowerCase(),
-      avatar,
-      cover,
-      isOnline,
-      lastSeen: serverTimestamp(),
-      followers: 0,
-      following: 0,
-      friends: 0,
-      profileCompleted: true,
-      createdAt: serverTimestamp(),
-    }, { merge: true });
-    router.push('/');
+    if (!displayName.trim() ||!username.trim()) return alert("اكمل البيانات");
+    const usernameLower = username.toLowerCase().trim().replace(/\s+/g,'_').replace('@','');
+
+    try {
+      // فحص اليوزرنيم محجوز ولا لا (لو غير اسمو)
+      if(existingData?.usernameLower!== usernameLower){
+        const q = query(collection(db, 'users'), where('usernameLower','==',usernameLower));
+        const snap = await getDocs(q);
+        if(!snap.empty){
+          return alert("اليوزرنيم محجوز");
+        }
+      }
+
+      // مهم: نعمل update فقط، ما نمسح role و email
+      await updateDoc(doc(db, 'users', uid), {
+        displayName: displayName.trim(),
+        username: usernameLower,
+        usernameLower: usernameLower,
+        avatar,
+        cover,
+        isOnline,
+        lastSeen: serverTimestamp(),
+        profileCompleted: true,
+      });
+      router.push('/');
+    } catch(e:any){
+      alert(e.message);
+    }
   };
+
+  if(loading) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري التحميل...</div>;
 
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap'); *{font-family:'Tajawal',sans-serif!important;}`}</style>
       <div className="min-h-screen bg-[#050a0a] p-4 flex justify-center" dir="rtl">
         <div className="w-full max-w-[600px]">
-          {/* Preview Cover */}
           <div className="relative h-[200px] rounded-[24px] overflow-hidden border border-white/10">
             <img src={cover} className="w-full h-full object-cover"/>
             <div className="absolute inset-0 bg-black/30"/>
@@ -79,7 +120,10 @@ export default function SetupProfile() {
                 <span className={`absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-black ${isOnline? 'bg-green-400' : 'bg-gray-500'}`}></span>
               </div>
               <div className="pb-2">
-                <h2 className="text-white font-black text-xl">{displayName || "اسمك"}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className={`font-black text-xl ${getNameColor(existingData?.role || '')}`}>{displayName || "اسمك"}</h2>
+                  {existingData?.role && <RoleBadge role={existingData.role}/>}
+                </div>
                 <p className="text-white/60 text-sm">@{username || "username"} • {isOnline? "متصل الآن" : "غير متصل"}</p>
               </div>
             </div>

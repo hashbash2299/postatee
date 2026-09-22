@@ -32,6 +32,47 @@ const RoleBadge = ({ role }: { role: string }) => {
   return null;
 };
 
+// --- مكون جديد يجيب البيانات لايف ---
+function useLiveUser(uid: string) {
+  const [user, setUser] = useState<any>(null);
+  useEffect(() => {
+    if(!uid) return;
+    const unsub = onSnapshot(doc(db, 'users', uid), (snap) => {
+      if(snap.exists()) setUser(snap.data());
+    });
+    return () => unsub();
+  }, [uid]);
+  return user;
+}
+
+function LiveAuthor({ uid, fallbackName, fallbackRole, fallbackAvatar, size = "post" }: { uid: string, fallbackName: string, fallbackRole: string, fallbackAvatar: string, size?: "post" | "comment" }) {
+  const liveUser = useLiveUser(uid);
+  const router = useRouter();
+
+  const displayName = liveUser?.displayName || fallbackName;
+  const role = liveUser?.role || fallbackRole || "";
+  const avatar = liveUser?.avatar || fallbackAvatar;
+  const isPost = size === "post";
+
+  return (
+    <>
+      <img
+        src={avatar || `https://i.pravatar.cc/100?u=${uid}`}
+        onClick={()=>router.push(`/profile/${uid}`)}
+        className={`${isPost? 'w-10 h-10' : 'w-7 h-7'} rounded-full border border-cyan-400/20 cursor-pointer hover:brightness-110 transition`}
+      />
+      <div className={isPost? "" : "flex-1"}>
+        <div className="flex items-center gap-2">
+          <span className={`font-bold ${isPost? 'text-sm' : 'text-xs'} cursor-pointer ${getNameColor(role)}`} onClick={()=>router.push(`/profile/${uid}`)}>{displayName}</span>
+          <RoleBadge role={role}/>
+          {!isPost && <span className="text-[10px] text-white/30">{/* time handled outside */}</span>}
+        </div>
+        {isPost && <span className="text-xs text-white/40">@{liveUser?.username || fallbackName}</span>}
+      </div>
+    </>
+  );
+}
+
 function CommentsList({ postId, currentUser }: { postId: string, currentUser:any }) {
   const [comments, setComments] = useState<any[]>([]);
   const router = useRouter();
@@ -45,23 +86,20 @@ function CommentsList({ postId, currentUser }: { postId: string, currentUser:any
 
   return (
     <div className="space-y-2 mt-3">
-      {comments.map((c:any)=>(
-        <div key={c.id} className="flex gap-2 bg-white/[0.03] border border-white/5 p-2.5 rounded-xl">
-          <img
-            src={c.authorAvatar}
-            onClick={()=>router.push(`/profile/${c.uid || c.authorId}`)}
-            className="w-7 h-7 rounded-full cursor-pointer hover:brightness-125"
-          />
-          <div className="flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <p className={`text-xs font-bold cursor-pointer ${getNameColor(c.authorRole||'')}`} onClick={()=>router.push(`/profile/${c.uid || c.authorId}`)}>{c.authorName}</p>
-              {c.authorRole && <RoleBadge role={c.authorRole}/>}
-              <p className="text-[10px] text-white/30">{timeAgo(c.created_at)}</p>
+      {comments.map((c:any)=>{
+        const uid = c.uid || c.authorId;
+        return (
+          <div key={c.id} className="flex gap-2 bg-white/[0.03] border border-white/5 p-2.5 rounded-xl">
+            <LiveAuthor uid={uid} fallbackName={c.authorName} fallbackRole={c.authorRole} fallbackAvatar={c.authorAvatar} size="comment" />
+            <div className="flex-1 -mt-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                 <p className="text-[10px] text-white/30">{timeAgo(c.created_at)}</p>
+              </div>
+              <p className="text-[13px] text-white/80 mt-1">{c.text}</p>
             </div>
-            <p className="text-[13px] text-white/80 mt-0.5">{c.text}</p>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   );
 }
@@ -150,7 +188,6 @@ export default function PostateeApp() {
 
   const handleComment = async (postId:string) => {
     const txt = commentText[postId]; if(!txt?.trim()) return;
-    // هنا التعديل المهم - حفظ الرتبة مع التعليق
     await addDoc(collection(db, 'posts', postId, 'comments'), {
       text: txt, created_at: serverTimestamp(),
       uid: currentUser.uid, authorId: currentUser.uid,
@@ -253,18 +290,13 @@ export default function PostateeApp() {
             </div>
           </div>
 
-          {posts.map((post:any)=>(
+          {posts.map((post:any)=>{
+            const uid = post.authorId || post.uid;
+            return (
             <div id={`post-${post.id}`} key={post.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 transition-all">
               <div className="flex justify-between">
-                <div className="flex gap-3">
-                  <img src={post.authorAvatar || `https://i.pravatar.cc/100?u=${post.uid}`} onClick={()=>router.push(`/profile/${post.authorId || post.uid}`)} className="w-10 h-10 rounded-full border border-cyan-400/20 cursor-pointer hover:brightness-110 transition"/>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`font-bold text-sm cursor-pointer ${getNameColor(post.authorRole || (post.authorUsername==='postatee'?'مالك':''))}`} onClick={()=>router.push(`/profile/${post.authorId || post.uid}`)}>{post.authorName}</span>
-                      <RoleBadge role={post.authorRole || (post.authorUsername==='postatee'?'مالك':'')}/>
-                    </div>
-                    <span className="text-xs text-white/40">{timeAgo(post.created_at)}</span>
-                  </div>
+                <div className="flex gap-3 items-center">
+                  <LiveAuthor uid={uid} fallbackName={post.authorName} fallbackRole={post.authorRole} fallbackAvatar={post.authorAvatar} size="post" />
                 </div>
                 <MoreHorizontal className="w-5 h-5 text-white/30"/>
               </div>
@@ -288,7 +320,7 @@ export default function PostateeApp() {
                 </div>
               )}
             </div>
-          ))}
+          )})}
         </div>
       </div>
     </>

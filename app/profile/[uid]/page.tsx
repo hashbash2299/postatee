@@ -1,10 +1,26 @@
 "use client"
 import { useState, useEffect, useRef } from "react";
 import { db, auth } from "../../lib/firebase";
-import { doc, getDoc, collection, getDocs, query, where, updateDoc } from "firebase/firestore";
+import { doc, collection, getDocs, query, where, updateDoc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Camera, ArrowLeft, User, Image as ImageIcon } from "lucide-react";
+import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+
+const getNameColor = (role:string) => {
+  if(role === "مؤسس") return "text-cyan-400";
+  if(role === "شخصية هامة") return "text-red-400";
+  if(role === "شارة خضراء") return "text-green-400";
+  if(role === "مالك") return "text-cyan-300";
+  return "text-white";
+};
+
+const RoleBadge = ({ role }: { role: string }) => {
+  if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[11px] font-black px-2.5 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
+  if (role === "مؤسس") return <span className="inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/50 text-cyan-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Gem className="w-3 h-3"/> مؤسس</span>;
+  if (role === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[11px] font-black px-2.5 py-0.5 rounded-full"><Star className="w-3 h-3 fill-red-400"/> هامة</span>;
+  if (role === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Verified className="w-3 h-3"/> موثق</span>;
+  return null;
+};
 
 export default function ProfileWall() {
   const { uid } = useParams();
@@ -16,22 +32,25 @@ export default function ProfileWall() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (me) => {
-      if (me?.uid === uid) setIsMine(true);
-      const snap = await getDoc(doc(db, 'users', uid as string));
+    if(!uid) return;
+    // Fix: نخليه لايف عشان اللون والشارة يتحدثو طوالي
+    const unsubUser = onSnapshot(doc(db, 'users', uid as string), (snap) => {
       if (snap.exists()) setUser(snap.data());
+    });
 
-      // Fix 1: نجيب بوستاتك سواء كانت محفوظة بـ uid أو authorId
+    const unsubAuth = onAuthStateChanged(auth, async (me) => {
+      if (me?.uid === uid) setIsMine(true);
+      // نجيب البوستات
       const postsRef = collection(db, 'posts');
       const q1 = await getDocs(query(postsRef, where('uid','==', uid)));
       const q2 = await getDocs(query(postsRef, where('authorId','==', uid)));
       const all = [...q1.docs,...q2.docs];
       const unique = Array.from(new Map(all.map(d=>[d.id, {id:d.id,...d.data()}])).values());
-      // ترتيب من الجديد للقديم
       unique.sort((a:any,b:any)=> (b.created_at?.seconds||0) - (a.created_at?.seconds||0));
       setPosts(unique as any[]);
     });
-    return () => unsub();
+
+    return () => { unsubUser(); unsubAuth(); };
   }, [uid]);
 
   const handleUpload = async (e:any, type:'avatar'|'cover') => {
@@ -41,7 +60,6 @@ export default function ProfileWall() {
     reader.onload = async (ev) => {
       const base64 = ev.target?.result as string;
       await updateDoc(doc(db, 'users', uid as string), { [type]: base64 });
-      setUser({...user, [type]: base64});
     };
     reader.readAsDataURL(file);
   };
@@ -50,16 +68,15 @@ export default function ProfileWall() {
 
   return (
     <div className="min-h-screen bg-[#050a0a]" dir="rtl">
-      {/* Fix 2: هيدر صغير فيه زر رجوع */}
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap'); *{font-family:'Tajawal',sans-serif!important;}`}</style>
       <header className="sticky top-0 z-50 h-[56px] bg-[#050a0a]/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-4">
         <button onClick={()=>router.push('/')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
           <ArrowLeft className="w-5 h-5 text-white"/>
         </button>
-        <span className="font-black">{user.displayName}</span>
+        <span className={`font-black ${getNameColor(user.role)}`}>{user.displayName}</span>
         <div className="w-9"/>
       </header>
 
-      {/* COVER */}
       <div className="relative h-[200px] w-full group bg-white/5">
         {user.cover? <img src={user.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
         <div className="absolute inset-0 bg-black/20"/>
@@ -72,7 +89,6 @@ export default function ProfileWall() {
           </>
         )}
 
-        {/* AVATAR */}
         <div className="absolute -bottom-14 right-6 flex items-end gap-4">
           <div className="relative">
             <div className="w-24 h-24 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden flex items-center justify-center">
@@ -89,17 +105,20 @@ export default function ProfileWall() {
             )}
           </div>
           <div className="pb-2">
-            <h1 className="text-white text-xl font-black">{user.displayName}</h1>
-            <p className="text-white/50 text-xs">@{user.username} • {user.isOnline?'متصل الآن':'غير متصل'}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className={`text-xl font-black ${getNameColor(user.role)}`}>{user.displayName}</h1>
+              <RoleBadge role={user.role}/>
+            </div>
+            <p className="text-white/50 text-xs mt-1">@{user.username} • {user.isOnline?'متصل الآن':'غير متصل'}</p>
           </div>
         </div>
       </div>
 
-      {/* POSTS WALL */}
       <div className="max-w-[600px] mx-auto mt-20 px-3 pb-20 space-y-3">
         <div className="flex gap-6 border-b border-white/10 pb-2 text-sm">
           <span className="font-bold text-white border-b-2 border-cyan-400 pb-2">المنشورات</span>
           <span className="text-white/40">{posts.length} منشور</span>
+          {user.role && <span className="mr-auto"><RoleBadge role={user.role}/></span>}
         </div>
 
         {posts.length===0 && <div className="text-center text-white/30 mt-10 border border-dashed border-white/10 rounded-2xl py-10">لسه ما نشرت حاجة</div>}
@@ -108,7 +127,8 @@ export default function ProfileWall() {
           <div key={p.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
             <div className="flex gap-2 items-center mb-2">
               <img src={user.avatar} className="w-8 h-8 rounded-full"/>
-              <span className="text-sm font-bold text-white">{user.displayName}</span>
+              <span className={`text-sm font-bold ${getNameColor(user.role)}`}>{user.displayName}</span>
+              <RoleBadge role={user.role}/>
             </div>
             <p className="text-[15px] whitespace-pre-wrap text-white/90">{p.content}</p>
             {p.image && <img src={p.image} className="mt-3 rounded-xl w-full"/>}
