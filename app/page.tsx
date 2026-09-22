@@ -1,23 +1,13 @@
 "use client"
 import { useState, useEffect } from "react";
 import { db, auth } from "./lib/firebase";
-import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import CreatePost from "../components/feed/CreatePost";
 import PostCard from "../components/feed/PostCard";
-import { collection as col, addDoc, orderBy as ob } from "firebase/firestore";
-
-// CommentsList هنا مؤقتاً لحد ما نفصلو
-function CommentsList({ postId }: any) {
-  const [comments, setComments] = useState<any[]>([]);
-  useEffect(() => {
-    const q = query(collection(db, 'posts', postId, 'comments'), ob('created_at', 'asc'));
-    const unsub = onSnapshot(q, (snap) => { setComments(snap.docs.map(d => ({ id: d.id,...d.data() }))); });
-    return () => unsub();
-  }, [postId]);
-  return <div className="space-y-2 mt-3">{comments.map((c:any)=><div key={c.id} className="bg-white/[0.03] p-2 rounded-xl text-sm">{c.authorName}: {c.text}</div>)}</div>
-}
+import Navbar from "../components/layout/Navbar";
+import Stories from "../components/feed/Stories";
 
 export default function Page(){
   const [posts, setPosts] = useState<any[]>([]);
@@ -34,7 +24,11 @@ export default function Page(){
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { router.push('/login'); return; }
       const snap = await getDoc(doc(db, 'users', u.uid));
-      if (snap.exists()) { const data = snap.data(); if (!data.profileCompleted) { router.push('/profile/setup'); return; } setCurrentUser({...data, uid: u.uid }); }
+      if (snap.exists()) {
+        const data = snap.data();
+        if (!data.profileCompleted) { router.push('/profile/setup'); return; }
+        setCurrentUser({...data, uid: u.uid });
+      }
       setLoading(false);
     });
     return () => unsub();
@@ -46,12 +40,16 @@ export default function Page(){
     return () => unsub();
   }, []);
 
-  if (loading) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-cyan-400">جاري التحميل...</div>;
+  if (loading) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-violet-400">جاري التحميل...</div>;
 
   return (
     <div className="min-h-screen bg-[#050a0a] text-white" dir="rtl">
-      <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10 px-4 py-2.5 flex justify-between"><span className="font-black">Postatee</span><button onClick={async()=>{await signOut(auth); router.push('/login');}} className="text-xs bg-white/10 px-3 py-1 rounded-full">خروج</button></header>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap'); *{font-family:'Tajawal',sans-serif!important;}.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
+
+      <Navbar currentUser={currentUser} setOpenComments={setOpenComments} />
+
       <div className="max-w-[600px] mx-auto p-3 space-y-3">
+        <Stories currentUser={currentUser} />
         <CreatePost currentUser={currentUser} />
         {posts.filter(p=>!hiddenPosts.includes(p.id)).map(post=>(
           <PostCard key={post.id} post={post} currentUser={currentUser}
@@ -64,7 +62,6 @@ export default function Page(){
             onCancelEdit={()=>setEditingPost(null)}
             commentText={commentText} setCommentText={setCommentText}
             openComments={openComments} setOpenComments={setOpenComments}
-            CommentsList={CommentsList}
           />
         ))}
       </div>
