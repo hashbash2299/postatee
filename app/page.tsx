@@ -1,10 +1,10 @@
 "use client"
 import { useState, useEffect, useRef } from "react";
 import { db, auth } from "./lib/firebase";
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment, where, writeBatch } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment, where } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { Search, Home, Heart, MessageCircle, Share2, MoreHorizontal, Crown, ShieldCheck, Star, CheckCircle2, ArrowRight, Plus, Image as ImageIcon, Video as VideoIcon, Send, Bell, MessageSquare, LogOut, X } from "lucide-react";
+import { Home, Heart, MessageCircle, Share2, MoreHorizontal, Crown, ShieldCheck, Star, CheckCircle2, Image as ImageIcon, Video as VideoIcon, Send, Bell, MessageSquare, LogOut, X, Verified, Gem } from "lucide-react";
 
 const timeAgo = (ts:any) => {
   if(!ts?.seconds) return "الآن";
@@ -16,38 +16,6 @@ const timeAgo = (ts:any) => {
   return new Date(ts.seconds*1000).toLocaleDateString('ar-EG');
 };
 
-function CommentsList({ postId }: { postId: string }) {
-  const [comments, setComments] = useState<any[]>([]);
-  useEffect(() => {
-    const q = query(collection(db, 'posts', postId, 'comments'), orderBy('created_at', 'asc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setComments(snap.docs.map(d => ({ id: d.id,...d.data() })));
-    });
-    return () => unsub();
-  }, [postId]);
-  return (
-    <div className="space-y-2 mt-3">
-      {comments.map((c:any)=>(
-        <div key={c.id} className="flex gap-2 bg-white/[0.03] border border-white/5 p-2.5 rounded-xl">
-          <img src={c.authorAvatar} className="w-7 h-7 rounded-full"/>
-          <div className="flex-1">
-            <div className="flex items-center gap-2"><p className="text-xs font-bold">{c.authorName}</p><p className="text-[10px] text-white/30">{timeAgo(c.created_at)}</p></div>
-            <p className="text-[13px] text-white/80 mt-0.5">{c.text}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const RoleBadge = ({ role }: { role: string }) => {
-  if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
-  if (role === "مؤسس") return <span className="inline-flex items-center gap-1 bg-white/10 border border-cyan-400/30 text-cyan-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><ShieldCheck className="w-3 h-3"/> مؤسس</span>;
-  if (role === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-red-500 to-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full"><Star className="w-3 h-3"/> هامة</span>;
-  if (role === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><CheckCircle2 className="w-3 h-3"/> موثق</span>;
-  return null;
-};
-
 const getNameColor = (role:string) => {
   if(role === "مؤسس") return "text-cyan-400";
   if(role === "شخصية هامة") return "text-red-400";
@@ -55,6 +23,48 @@ const getNameColor = (role:string) => {
   if(role === "مالك") return "text-cyan-300";
   return "text-white";
 };
+
+const RoleBadge = ({ role }: { role: string }) => {
+  if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
+  if (role === "مؤسس") return <span className="inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/50 text-cyan-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><Gem className="w-3 h-3"/> مؤسس</span>;
+  if (role === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full"><Star className="w-3 h-3 fill-red-400"/> هامة</span>;
+  if (role === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><Verified className="w-3 h-3"/> موثق</span>;
+  return null;
+};
+
+function CommentsList({ postId, currentUser }: { postId: string, currentUser:any }) {
+  const [comments, setComments] = useState<any[]>([]);
+  const router = useRouter();
+  useEffect(() => {
+    const q = query(collection(db, 'posts', postId, 'comments'), orderBy('created_at', 'asc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setComments(snap.docs.map(d => ({ id: d.id,...d.data() })));
+    });
+    return () => unsub();
+  }, [postId]);
+
+  return (
+    <div className="space-y-2 mt-3">
+      {comments.map((c:any)=>(
+        <div key={c.id} className="flex gap-2 bg-white/[0.03] border border-white/5 p-2.5 rounded-xl">
+          <img
+            src={c.authorAvatar}
+            onClick={()=>router.push(`/profile/${c.uid || c.authorId}`)}
+            className="w-7 h-7 rounded-full cursor-pointer hover:brightness-125"
+          />
+          <div className="flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className={`text-xs font-bold cursor-pointer ${getNameColor(c.authorRole||'')}`} onClick={()=>router.push(`/profile/${c.uid || c.authorId}`)}>{c.authorName}</p>
+              {c.authorRole && <RoleBadge role={c.authorRole}/>}
+              <p className="text-[10px] text-white/30">{timeAgo(c.created_at)}</p>
+            </div>
+            <p className="text-[13px] text-white/80 mt-0.5">{c.text}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function PostateeApp() {
   const [text, setText] = useState("");
@@ -140,7 +150,15 @@ export default function PostateeApp() {
 
   const handleComment = async (postId:string) => {
     const txt = commentText[postId]; if(!txt?.trim()) return;
-    await addDoc(collection(db, 'posts', postId, 'comments'), { text: txt, created_at: serverTimestamp(), uid: currentUser.uid, authorName: currentUser.displayName, authorAvatar: currentUser.avatar });
+    // هنا التعديل المهم - حفظ الرتبة مع التعليق
+    await addDoc(collection(db, 'posts', postId, 'comments'), {
+      text: txt, created_at: serverTimestamp(),
+      uid: currentUser.uid, authorId: currentUser.uid,
+      authorName: currentUser.displayName,
+      authorAvatar: currentUser.avatar,
+      authorRole: currentUser.role || "",
+      authorUsername: currentUser.username
+    });
     await updateDoc(doc(db, 'posts', postId), { commentsCount: increment(1) });
     setCommentText({...commentText, [postId]:""});
     const post = posts.find(p=>p.id===postId);
@@ -161,8 +179,7 @@ export default function PostateeApp() {
   };
 
   const markAllRead = async () => {
-    const batch = notifications.filter(n=>!n.read);
-    for(const n of batch) await updateDoc(doc(db,"notifications",n.id),{read:true});
+    for(const n of notifications.filter(n=>!n.read)) await updateDoc(doc(db,"notifications",n.id),{read:true});
   };
 
   const handleShare = async (post:any) => {
@@ -236,8 +253,6 @@ export default function PostateeApp() {
             </div>
           </div>
 
-          {posts.length === 0 && <div className="text-center text-white/40 py-12 border border-dashed border-white/10 rounded-2xl">لا توجد منشورات بعد - كن أول من ينشر! 💎</div>}
-
           {posts.map((post:any)=>(
             <div id={`post-${post.id}`} key={post.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 transition-all">
               <div className="flex justify-between">
@@ -245,9 +260,8 @@ export default function PostateeApp() {
                   <img src={post.authorAvatar || `https://i.pravatar.cc/100?u=${post.uid}`} onClick={()=>router.push(`/profile/${post.authorId || post.uid}`)} className="w-10 h-10 rounded-full border border-cyan-400/20 cursor-pointer hover:brightness-110 transition"/>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className={`font-bold text-sm ${getNameColor(post.authorRole || (post.authorUsername==='postatee'?'مالك':''))}`}>{post.authorName}</span>
+                      <span className={`font-bold text-sm cursor-pointer ${getNameColor(post.authorRole || (post.authorUsername==='postatee'?'مالك':''))}`} onClick={()=>router.push(`/profile/${post.authorId || post.uid}`)}>{post.authorName}</span>
                       <RoleBadge role={post.authorRole || (post.authorUsername==='postatee'?'مالك':'')}/>
-                      <CheckCircle2 className="w-4 h-4 text-cyan-400"/>
                     </div>
                     <span className="text-xs text-white/40">{timeAgo(post.created_at)}</span>
                   </div>
@@ -270,7 +284,7 @@ export default function PostateeApp() {
                       <button onClick={()=>handleComment(post.id)} className="bg-cyan-400 text-black rounded-full w-8 h-8 flex items-center justify-center"><Send className="w-4 h-4"/></button>
                     </div>
                   </div>
-                  <CommentsList postId={post.id} />
+                  <CommentsList postId={post.id} currentUser={currentUser}/>
                 </div>
               )}
             </div>
