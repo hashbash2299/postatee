@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import CreatePost from "../components/feed/CreatePost";
 import PostCard from "../components/feed/PostCard";
 import Stories from "../components/feed/Stories";
+import TickerBar from "../components/layout/TickerBar";
 
 export default function Page(){
   const [posts, setPosts] = useState<any[]>([]);
@@ -68,6 +69,7 @@ export default function Page(){
 
   return (
     <div className="min-h-screen bg-[#0B1418] text-white" dir="rtl">
+      <TickerBar />
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@700;800&display=swap'); *{font-family:'Tajawal',sans-serif!important}.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
 
       {/* MOBILE HEADER */}
