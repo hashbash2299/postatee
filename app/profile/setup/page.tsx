@@ -48,27 +48,32 @@ export default function SetupProfile() {
   const [uid, setUid] = useState("");
   const [existingData, setExistingData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) { router.push('/login'); return; }
-      setUid(u.uid);
-      const snap = await getDoc(doc(db, 'users', u.uid));
-      if (snap.exists()) {
-        const data = snap.data();
-        setExistingData(data);
-        // املأ البيانات القديمة لو موجودة
-        if(data.displayName) setDisplayName(data.displayName);
-        if(data.username) setUsername(data.username);
-        if(data.avatar) setAvatar(data.avatar);
-        if(data.cover) setCover(data.cover);
-        // لو مكمل قبل كده ما نوديه تاني، لكن نسمح له يعدل
-        if(data.profileCompleted &&!data.displayName) {
-          // skip
+      try {
+        if (!u) {
+          router.push('/login');
+          return;
         }
+        setUid(u.uid);
+        const snap = await getDoc(doc(db, 'users', u.uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          setExistingData(data);
+          if(data.displayName) setDisplayName(data.displayName);
+          if(data.username) setUsername(data.username);
+          if(data.avatar) setAvatar(data.avatar);
+          if(data.cover) setCover(data.cover);
+        }
+      } catch (err) {
+        console.error("Error loading profile:", err);
+      } finally {
+        // ده أهم سطر - بقفل السكيلتون مهما حصل
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsub();
   }, [router]);
@@ -76,18 +81,20 @@ export default function SetupProfile() {
   const handleSave = async () => {
     if (!displayName.trim() ||!username.trim()) return alert("اكمل البيانات");
     const usernameLower = username.toLowerCase().trim().replace(/\s+/g,'_').replace('@','');
+    if (usernameLower.length < 3) return alert("اليوزرنيم قصير");
 
+    setSaving(true);
     try {
-      // فحص اليوزرنيم محجوز ولا لا (لو غير اسمو)
       if(existingData?.usernameLower!== usernameLower){
         const q = query(collection(db, 'users'), where('usernameLower','==',usernameLower));
         const snap = await getDocs(q);
         if(!snap.empty){
-          return alert("اليوزرنيم محجوز");
+          alert("اليوزرنيم محجوز");
+          setSaving(false);
+          return;
         }
       }
 
-      // مهم: نعمل update فقط، ما نمسح role و email
       await updateDoc(doc(db, 'users', uid), {
         displayName: displayName.trim(),
         username: usernameLower,
@@ -101,10 +108,19 @@ export default function SetupProfile() {
       router.push('/');
     } catch(e:any){
       alert(e.message);
+    } finally {
+      setSaving(false);
     }
   };
 
-  if(loading) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري التحميل...</div>;
+  if(loading) {
+    return (
+      <div className="min-h-screen bg-[#050a0a] flex flex-col items-center justify-center text-white gap-3">
+        <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+        <p>جاري التحميل...</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -112,11 +128,11 @@ export default function SetupProfile() {
       <div className="min-h-screen bg-[#050a0a] p-4 flex justify-center" dir="rtl">
         <div className="w-full max-w-[600px]">
           <div className="relative h-[200px] rounded-[24px] overflow-hidden border border-white/10">
-            <img src={cover} className="w-full h-full object-cover"/>
+            <img src={cover} className="w-full h-full object-cover" alt="cover"/>
             <div className="absolute inset-0 bg-black/30"/>
             <div className="absolute bottom-4 left-4 right-4 flex items-end gap-4">
               <div className="relative">
-                <img src={avatar} className="w-24 h-24 rounded-full border-4 border-[#050a0a] object-cover"/>
+                <img src={avatar} className="w-24 h-24 rounded-full border-4 border-[#050a0a] object-cover" alt="avatar"/>
                 <span className={`absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-black ${isOnline? 'bg-green-400' : 'bg-gray-500'}`}></span>
               </div>
               <div className="pb-2">
@@ -140,11 +156,11 @@ export default function SetupProfile() {
             <div><label className="text-sm text-white/60">اسم المستخدم</label><input value={username} onChange={e=>setUsername(e.target.value)} placeholder="بدون @" className="mt-2 w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white outline-none focus:border-cyan-400/50"/></div>
 
             <div><label className="text-sm text-white/60 mb-2 flex gap-2"><Camera className="w-4 h-4"/> اختر صورة رمزية</label>
-              <div className="grid grid-cols-4 gap-3">{defaultAvatars.map((a,i)=><img key={i} src={a} onClick={()=>setAvatar(a)} className={`w-full aspect-square rounded-full cursor-pointer border-2 ${avatar===a?'border-cyan-400':'border-transparent'}`}/>)}</div>
+              <div className="grid grid-cols-4 gap-3">{defaultAvatars.map((a,i)=><img key={i} src={a} onClick={()=>setAvatar(a)} className={`w-full aspect-square rounded-full cursor-pointer border-2 ${avatar===a?'border-cyan-400':'border-transparent'}`} alt="av"/>)}</div>
             </div>
 
             <div><label className="text-sm text-white/60 mb-2">اختر خلفية افتراضية</label>
-              <div className="grid grid-cols-3 gap-3">{defaultCovers.map((c,i)=><img key={i} src={c} onClick={()=>setCover(c)} className={`w-full h-20 rounded-xl object-cover cursor-pointer border-2 ${cover===c?'border-cyan-400':'border-transparent'}`}/>)}</div>
+              <div className="grid grid-cols-3 gap-3">{defaultCovers.map((c,i)=><img key={i} src={c} onClick={()=>setCover(c)} className={`w-full h-20 rounded-xl object-cover cursor-pointer border-2 ${cover===c?'border-cyan-400':'border-transparent'}`} alt="cover"/>)}</div>
             </div>
 
             <div className="flex items-center justify-between bg-white/5 p-4 rounded-full border border-white/10">
@@ -152,7 +168,9 @@ export default function SetupProfile() {
               <button onClick={()=>setIsOnline(!isOnline)} className={`px-4 py-1.5 rounded-full text-xs font-bold ${isOnline?'bg-green-400 text-black':'bg-white/10 text-white/60'}`}>{isOnline?'متصل':'غير متصل'}</button>
             </div>
 
-            <button onClick={handleSave} className="w-full bg-gradient-to-r from-cyan-400 to-teal-400 text-black font-black py-4 rounded-full flex items-center justify-center gap-2"><Check className="w-5 h-5"/> حفظ وادخل المنصة</button>
+            <button onClick={handleSave} disabled={saving} className="w-full bg-gradient-to-r from-cyan-400 to-teal-400 text-black font-black py-4 rounded-full flex items-center justify-center gap-2 disabled:opacity-50">
+              <Check className="w-5 h-5"/> {saving? 'جاري الحفظ...' : 'حفظ وادخل المنصة'}
+            </button>
           </div>
         </div>
       </div>
