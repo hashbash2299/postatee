@@ -5,7 +5,7 @@ import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, setDoc,
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, LogOut, Bell } from "lucide-react";
+import { Users, LogOut, Bell, MessageCircle } from "lucide-react";
 import CreatePost from "../components/feed/CreatePost";
 import PostCard from "../components/feed/PostCard";
 import Stories from "../components/feed/Stories";
@@ -65,10 +65,13 @@ export default function Page(){
           await setDoc(userRef, { profileCompleted: true }, { merge: true });
         }
         setCurrentUser({...data, uid: u.uid });
+
         const qReq = query(collection(db,'friendRequests'), where('to','==', u.uid), where('status','==','pending'));
         unsubReq = onSnapshot(qReq, s=> setReqCount(s.size));
+
         const qNotif = query(collection(db,'notifications'), where('toUid','==', u.uid), where('read','==', false));
         unsubNotif = onSnapshot(qNotif, s=> setNotifCount(s.size));
+
       } catch (e) {
         console.error("Auth error:", e);
       } finally {
@@ -96,6 +99,7 @@ export default function Page(){
       <div className="h-[28px] w-full shrink-0"></div>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@700;800&display=swap'); *{font-family:'Tajawal',sans-serif!important}.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
 
+      {/* هيدر الجوال */}
       <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#122025] sticky top-[28px] z-40 border-b border-[#1A2E35]">
         <div className="flex items-center gap-3">
           <Link href={`/profile/${currentUser?.uid}`}><img src={currentUser?.photoURL || `https://i.pravatar.cc/100?img=15`} className="w-9 h-9 rounded-full border-2 border-[#00E5FF]"/></Link>
@@ -107,11 +111,42 @@ export default function Page(){
             <Bell className="w-5 h-5 text-white"/>
             {notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{notifCount}</span>}
           </Link>
-          <Link href="/messages" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><span>💬</span></Link>
+          <Link href="/messages" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
+            <MessageCircle className="w-5 h-5 text-white"/>
+          </Link>
         </div>
         <div className="flex items-center gap-2">
           <div><h1 className="font-black text-[20px] leading-none">Posta<span className="text-[#00E5FF]">tee</span></h1><p className="text-[8px] text-gray-400">منصة سودانية لكل السودانيين</p></div>
           <div className="w-8 h-8 bg-[#00E5FF] rounded-lg flex items-center justify-center text-black font-black">P</div>
+        </div>
+      </header>
+
+      {/* هيدر اللابتوب الجديد */}
+      <header className="hidden lg:flex items-center justify-between px-6 py-3 bg-[#122025] sticky top-[28px] z-40 border-b border-[#1A2E35] max-w-[1600px] mx-auto w-full">
+        <div className="flex items-center gap-4">
+          <Link href={`/profile/${currentUser?.uid}`} className="flex items-center gap-2">
+            <img src={currentUser?.photoURL || `https://i.pravatar.cc/100?img=15`} className="w-10 h-10 rounded-full border-2 border-[#00E5FF]"/>
+            <span className="font-bold text-sm">{currentUser?.displayName}</span>
+          </Link>
+          <div className="h-6 w-[1px] bg-[#1A2E35] mx-2"></div>
+          <Link href="/friends" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20">
+            <Users className="w-5 h-5 text-white"/>
+            {reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] font-black w-5 h-5 rounded-full flex items-center justify-center">{reqCount}</span>}
+          </Link>
+          <Link href="/messages" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20">
+            <MessageCircle className="w-5 h-5 text-white"/>
+          </Link>
+          <Link href="/notifications" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20">
+            <Bell className="w-5 h-5 text-white"/>
+            {notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{notifCount}</span>}
+          </Link>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-left">
+            <h1 className="font-black text-[22px] leading-none">Posta<span className="text-[#00E5FF]">tee</span></h1>
+            <p className="text-[9px] text-gray-400">منصة سودانية لكل السودانيين حول العالم</p>
+          </div>
+          <div className="w-10 h-10 bg-[#00E5FF] rounded-xl flex items-center justify-center text-black font-black text-xl">P</div>
         </div>
       </header>
 
@@ -171,7 +206,7 @@ export default function Page(){
               {reqCount>0 && <span className="bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full">{reqCount}</span>}
             </Link>
             <Link href="/messages" className="p-3 text-gray-300 flex items-center justify-between rounded-xl hover:bg-[#1A2E35] transition-all">
-              <span className="flex items-center gap-2">💬 الرسائل</span>
+              <span className="flex items-center gap-2"><MessageCircle className="w-5 h-5"/> الرسائل</span>
             </Link>
             <Link href="/notifications" className="p-3 text-gray-300 flex items-center justify-between rounded-xl hover:bg-[#1A2E35] transition-all">
               <span className="flex items-center gap-2"><Bell className="w-5 h-5"/> الإشعارات</span>
