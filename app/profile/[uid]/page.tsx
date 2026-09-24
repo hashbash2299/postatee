@@ -138,47 +138,60 @@ export default function ProfileWall() {
       <div className="relative h-[200px] w-full bg-white/5">
         {user.cover? <img src={user.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
         {isMine && (<><button onClick={()=>coverInput.current?.click()} className="absolute bottom-4 left-4 bg-black/60 p-2.5 rounded-full border border-white/20"><Camera className="w-5 h-5 text-white"/></button><input ref={coverInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'cover')}/></>)}
-        <div className="absolute -bottom-14 right-6 left-6 flex items-end justify-between">
-          <div className="flex items-end gap-4">
-            <div className="relative"><div className="w-24 h-24 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden">{user.avatar? <img src={user.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}</div>{isMine && (<><button onClick={()=>avatarInput.current?.click()} className="absolute -bottom-1 -left-1 bg-white p-1.5 rounded-full"><Camera className="w-4 h-4 text-black"/></button><input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'avatar')}/></>)}</div>
-            <div className="pb-2"><div className="flex items-center gap-2"><h1 className={`text-xl font-black ${getNameColor(user.role)}`}>{user.displayName}</h1><RoleBadge role={user.role}/></div><p className="text-white/50 text-xs mt-1">@{user.username} • {friendsCount} صديق</p></div>
-          </div>
 
-          {/* الزرين - مقاس منطقي ومظبوط */}
-          {!isMine && myUid && (
-            <div className="pb-2 flex gap-2 items-center">
-              {friendStatus==='friends'? (
-                <>
-                  <button onClick={handleUnfriend} className="h-9 px-4 rounded-full bg-white/[0.06] border border-white/10 text-white font-bold text-[12px] flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5"/> صديق</button>
-                  <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-[#00E5FF] text-black font-black text-[12px] flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5"/> مراسلة</button>
-                </>
-              ) : friendStatus==='pending_sent'? (
-                <>
-                  <button onClick={handleCancel} className="h-9 px-4 rounded-full bg-white/10 border border-white/15 text-white font-bold text-[12px] flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> تم الإرسال</button>
-                  <button onClick={handleMessageClick} className="h-9 px-4 rounded-full bg-transparent border border-cyan-400/40 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> {msgRequestStatus==='pending'?'تم الطلب':'طلب مراسلة'}</button>
-                </>
-              ) : friendStatus==='pending_received'? (
-                <div className="flex gap-2">
-                  <button onClick={handleAccept} className="h-9 px-4 rounded-full bg-green-500 text-white font-black text-[12px] flex items-center gap-1"><Check className="w-3.5 h-3.5"/> قبول</button>
-                  <button onClick={handleCancel} className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white"/></button>
-                  <button onClick={handleMessageClick} className="h-9 px-4 rounded-full bg-transparent border border-cyan-400/40 text-cyan-400 font-bold text-[12px]">طلب مراسلة</button>
-                </div>
-              ) : (
-                <>
-                  <button onClick={handleSend} className="h-9 px-5 rounded-full bg-white text-black font-black text-[12px] flex items-center gap-1.5 hover:bg-zinc-100 transition"><UserPlus className="w-3.5 h-3.5"/> إضافة صديق</button>
-                  <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5 hover:bg-cyan-400/10 transition"><Send className="w-3.5 h-3.5"/> طلب مراسلة</button>
-                </>
-              )}
+        {/* الصورة والاسم فقط - بدون ازرار */}
+        <div className="absolute -bottom-12 right-6 flex items-end gap-4">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden">
+              {user.avatar? <img src={user.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}
             </div>
-          )}
+            {isMine && (<><button onClick={()=>avatarInput.current?.click()} className="absolute -bottom-1 -left-1 bg-white p-1.5 rounded-full"><Camera className="w-4 h-4 text-black"/></button><input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'avatar')}/></>)}
+          </div>
+          <div className="pb-2">
+            <div className="flex items-center gap-2">
+              <h1 className={`text-xl font-black ${getNameColor(user.role)}`}>{user.displayName}</h1>
+              <RoleBadge role={user.role}/>
+            </div>
+            <p className="text-white/50 text-xs mt-1">@{user.username} • {friendsCount} صديق</p>
+          </div>
         </div>
       </div>
 
-      {showMsgInput && (
-        <div className="max-w-[600px] mx-auto mt-20 px-3"><div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2"><input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${user.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none text-white"/><button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button><button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4 text-white"/></button></div></div>
+      {/* الزرين - تحت الصورة مباشرة - ظاهرين في الجوال واللابتوب */}
+      {!isMine && myUid && (
+        <div className="max-w-[600px] mx-auto px-6 mt-[68px]">
+          <div className="flex gap-2.5 flex-wrap">
+            {friendStatus==='friends'? (
+              <>
+                <button onClick={handleUnfriend} className="h-9 px-5 rounded-full bg-white/[0.06] border border-white/10 text-white font-bold text-[12px] flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5"/> صديق</button>
+                <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-[#00E5FF] text-black font-black text-[12px] flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5"/> مراسلة</button>
+              </>
+            ) : friendStatus==='pending_sent'? (
+              <>
+                <button onClick={handleCancel} className="h-9 px-5 rounded-full bg-white/10 border border-white/15 text-white font-bold text-[12px] flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> تم الإرسال</button>
+                <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400/50 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> {msgRequestStatus==='pending'?'تم الطلب':'طلب مراسلة'}</button>
+              </>
+            ) : friendStatus==='pending_received'? (
+              <>
+                <button onClick={handleAccept} className="h-9 px-5 rounded-full bg-green-500 text-white font-black text-[12px] flex items-center gap-1.5"><Check className="w-3.5 h-3.5"/> قبول</button>
+                <button onClick={handleCancel} className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white"/></button>
+                <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400/50 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> طلب مراسلة</button>
+              </>
+            ) : (
+              <>
+                <button onClick={handleSend} className="h-9 px-5 rounded-full bg-white text-black font-black text-[12px] flex items-center gap-1.5 hover:bg-zinc-100 transition"><UserPlus className="w-3.5 h-3.5"/> إضافة صديق</button>
+                <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5 hover:bg-cyan-400/10 transition"><Send className="w-3.5 h-3.5"/> طلب مراسلة</button>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
-      <div className="max-w-[600px] mx-auto mt-20 px-3 pb-20">
+      {showMsgInput && (
+        <div className="max-w-[600px] mx-auto mt-6 px-3"><div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2"><input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${user.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none text-white"/><button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button><button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4 text-white"/></button></div></div>
+      )}
+
+      <div className="max-w-[600px] mx-auto mt-8 px-3 pb-20">
         <div className="flex bg-white/[0.05] rounded-2xl p-1.5 gap-1.5 border border-white/10">
           <button onClick={()=>setTab('all')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='all'?'bg-[#00E5FF] text-black':'text-white/50'}`}>الكل</button>
           <button onClick={()=>setTab('media')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='media'?'bg-[#00E5FF] text-black':'text-white/50'}`}>وسائط</button>

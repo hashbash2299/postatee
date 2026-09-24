@@ -71,7 +71,6 @@ export default function SetupProfile() {
       } catch (err) {
         console.error("Error loading profile:", err);
       } finally {
-        // ده أهم سطر - بقفل السكيلتون مهما حصل
         setLoading(false);
       }
     });
@@ -94,7 +93,6 @@ export default function SetupProfile() {
           return;
         }
       }
-
       await updateDoc(doc(db, 'users', uid), {
         displayName: displayName.trim(),
         username: usernameLower,
@@ -117,7 +115,7 @@ export default function SetupProfile() {
     return (
       <div className="min-h-screen bg-[#050a0a] flex flex-col items-center justify-center text-white gap-3">
         <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
-        <p>جاري التحميل...</p>
+        <p className="text-sm text-white/50">جاري التحميل...</p>
       </div>
     );
   }
@@ -168,7 +166,7 @@ export default function SetupProfile() {
               <button onClick={()=>setIsOnline(!isOnline)} className={`px-4 py-1.5 rounded-full text-xs font-bold ${isOnline?'bg-green-400 text-black':'bg-white/10 text-white/60'}`}>{isOnline?'متصل':'غير متصل'}</button>
             </div>
 
-            <button onClick={handleSave} disabled={saving} className="w-full bg-gradient-to-r from-cyan-400 to-teal-400 text-black font-black py-4 rounded-full flex items-center justify-center gap-2 disabled:opacity-50">
+            <button onClick={handleSave} disabled={saving} className="w-full bg-gradient-to-r from-cyan-400 to-teal-400 text-black font-black py-3 rounded-full flex items-center justify-center gap-2 text-[14px] disabled:opacity-50">
               <Check className="w-5 h-5"/> {saving? 'جاري الحفظ...' : 'حفظ وادخل المنصة'}
             </button>
           </div>
