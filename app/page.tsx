@@ -93,10 +93,10 @@ export default function Page(){
   return (
     <div className="min-h-screen bg-[#0B1418] text-white" dir="rtl">
       <div className="fixed top-0 left-0 right-0 z-[100] w-full"><TickerBar /></div>
-      <div className="h-[28px] w-full"></div>
+      <div className="h-[28px] w-full shrink-0"></div>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@700;800&display=swap'); *{font-family:'Tajawal',sans-serif!important}.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
 
-      <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#122025] sticky top-0 z-40 border-b border-[#1A2E35]">
+      <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#122025] sticky top-[28px] z-40 border-b border-[#1A2E35]">
         <div className="flex items-center gap-3">
           <Link href={`/profile/${currentUser?.uid}`}><img src={currentUser?.photoURL || `https://i.pravatar.cc/100?img=15`} className="w-9 h-9 rounded-full border-2 border-[#00E5FF]"/></Link>
           <Link href="/friends" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">

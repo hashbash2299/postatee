@@ -1,7 +1,7 @@
 "use client"
 export default function TickerBar(){
   return (
-    <div className="w-full bg-[#00E5FF] text-black text-[12px] font-bold py-1.5 overflow-hidden whitespace-nowrap relative z-[100] h-[28px] flex items-center">
+    <div className="w-full bg-[#00E5FF] text-black text-[12px] font-bold h-[28px] flex items-center overflow-hidden whitespace-nowrap">
       <div className="animate-marquee flex gap-10">
         <span>👋 مرحباً بكم في Postatee - منصة سودانية لكل السودانيين حول العالم - معاً نبني سودان أفضل 🇸🇩</span>
         <span>👋 مرحباً بكم في Postatee - منصة سودانية لكل السودانيين حول العالم - معاً نبني سودان أفضل 🇸🇩</span>
