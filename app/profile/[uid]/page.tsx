@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { db, auth } from "../../lib/firebase";
 import { doc, collection, getDocs, query, where, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus } from "lucide-react";
+import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, FileText, Images, LayoutGrid } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
 const getNameColor = (role:string) => {
@@ -31,6 +31,7 @@ export default function ProfileWall() {
   const [friendStatus, setFriendStatus] = useState<'none'|'pending_sent'|'pending_received'|'friends'|'loading'>('loading');
   const [requestId, setRequestId] = useState<string|null>(null);
   const [friendsCount, setFriendsCount] = useState(0);
+  const [tab, setTab] = useState<'all'|'media'|'text'>('all');
 
   const avatarInput = useRef<HTMLInputElement>(null);
   const coverInput = useRef<HTMLInputElement>(null);
@@ -60,7 +61,6 @@ export default function ProfileWall() {
     return () => { unsubUser(); unsubAuth(); };
   }, [uid]);
 
-  // نظام الأصدقاء - لايف
   useEffect(() => {
     if(!myUid ||!uid || myUid === uid) return;
     const targetUid = uid as string;
@@ -71,7 +71,6 @@ export default function ProfileWall() {
         setFriendStatus('friends');
         return;
       }
-      // لو ما أصدقاء شوف الطلبات
       const q = query(collection(db,'friendRequests'), where('from','in',[myUid,targetUid]));
       const unsubReq = onSnapshot(q, (qs)=>{
         let found = false;
@@ -94,7 +93,6 @@ export default function ProfileWall() {
       return ()=>unsubReq();
     });
 
-    // عدد الأصدقاء
     const unsubCount = onSnapshot(query(collection(db,'friends'), where('users','array-contains', targetUid)), (snap)=>{
       setFriendsCount(snap.size);
     });
@@ -150,6 +148,13 @@ export default function ProfileWall() {
 
   if (!user) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري تحميل الحائط...</div>;
 
+  const filteredPosts = posts.filter((p:any)=>{
+    if(tab==='all') return true;
+    if(tab==='media') return p.image || p.video || p.media;
+    if(tab==='text') return!p.image &&!p.video &&!p.media;
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-[#050a0a]" dir="rtl">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap'); *{font-family:'Tajawal',sans-serif!important;}`}</style>
@@ -196,7 +201,6 @@ export default function ProfileWall() {
             <p className="text-white/50 text-xs mt-1">@{user.username} • {friendsCount} صديق • {user.isOnline?'متصل الآن':'غير متصل'}</p>
           </div>
 
-          {/* زرار الصداقة - يظهر لو ما صفحتك */}
           {!isMine && myUid && (
             <div className="pb-2">
               {friendStatus==='none' && <button onClick={handleSend} className="bg-gradient-to-r from-cyan-400 to-teal-400 text-black font-black text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><UserPlus className="w-4 h-4"/> إضافة</button>}
@@ -209,26 +213,36 @@ export default function ProfileWall() {
         </div>
       </div>
 
-      <div className="max-w-[600px] mx-auto mt-20 px-3 pb-20 space-y-3">
+      <div className="max-w-[600px] mx-auto mt-20 px-3 pb-20">
         <div className="flex gap-6 border-b border-white/10 pb-2 text-sm">
-          <span className="font-bold text-white border-b-2 border-cyan-400 pb-2">المنشورات</span>
+          <span className="font-bold text-white border-b-2 border-cyan-400 pb-2">البروفايل</span>
           <span className="text-white/40">{posts.length} منشور • {friendsCount} صديق</span>
           {user.role && <span className="mr-auto"><RoleBadge role={user.role}/></span>}
         </div>
 
-        {posts.length===0 && <div className="text-center text-white/30 mt-10 border border-dashed border-white/10 rounded-2xl py-10">لسه ما نشرت حاجة</div>}
+        {/* التابات الجديدة */}
+        <div className="flex bg-white/[0.05] rounded-2xl p-1.5 gap-1.5 mt-4 border border-white/10 sticky top-[60px] z-40 backdrop-blur-xl">
+          <button onClick={()=>setTab('all')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] flex items-center justify-center gap-1.5 transition-all ${tab==='all'?'bg-[#00E5FF] text-black shadow-lg':'text-white/50 hover:text-white'}`}><LayoutGrid className="w-4 h-4"/> الكل ({posts.length})</button>
+          <button onClick={()=>setTab('media')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] flex items-center justify-center gap-1.5 transition-all ${tab==='media'?'bg-[#00E5FF] text-black shadow-lg':'text-white/50 hover:text-white'}`}><Images className="w-4 h-4"/> وسائط ({posts.filter((p:any)=>p.image||p.video||p.media).length})</button>
+          <button onClick={()=>setTab('text')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] flex items-center justify-center gap-1.5 transition-all ${tab==='text'?'bg-[#00E5FF] text-black shadow-lg':'text-white/50 hover:text-white'}`}><FileText className="w-4 h-4"/> كتابة ({posts.filter((p:any)=>!p.image&&!p.video&&!p.media).length})</button>
+        </div>
 
-        {posts.map((p:any)=>
-          <div key={p.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
-            <div className="flex gap-2 items-center mb-2">
-              <img src={user.avatar} className="w-8 h-8 rounded-full"/>
-              <span className={`text-sm font-bold ${getNameColor(user.role)}`}>{user.displayName}</span>
-              <RoleBadge role={user.role}/>
+        <div className="space-y-3 mt-4">
+          {filteredPosts.length===0 && <div className="text-center text-white/30 mt-10 border border-dashed border-white/10 rounded-2xl py-10">ما في منشورات في قسم {tab==='media'?'الوسائط':tab==='text'?'الكتابات':'الكل'} لسه</div>}
+
+          {filteredPosts.map((p:any)=>
+            <div key={p.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+              <div className="flex gap-2 items-center mb-2">
+                <img src={user.avatar} className="w-8 h-8 rounded-full"/>
+                <span className={`text-sm font-bold ${getNameColor(user.role)}`}>{user.displayName}</span>
+                <RoleBadge role={user.role}/>
+              </div>
+              <p className="text-[15px] whitespace-pre-wrap text-white/90">{p.content}</p>
+              {p.image && <img src={p.image} className="mt-3 rounded-xl w-full"/>}
+              {p.video && <video src={p.video} controls className="mt-3 rounded-xl w-full"/>}
             </div>
-            <p className="text-[15px] whitespace-pre-wrap text-white/90">{p.content}</p>
-            {p.image && <img src={p.image} className="mt-3 rounded-xl w-full"/>}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

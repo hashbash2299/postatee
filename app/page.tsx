@@ -2,10 +2,10 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "./lib/firebase";
 import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, setDoc, where } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { Users, LogOut } from "lucide-react";
 import CreatePost from "../components/feed/CreatePost";
 import PostCard from "../components/feed/PostCard";
 import Stories from "../components/feed/Stories";
@@ -22,6 +22,19 @@ export default function Page(){
   const [openComments, setOpenComments] = useState<any>({});
   const [reqCount, setReqCount] = useState(0);
   const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      const u = auth.currentUser;
+      if (u) {
+        await updateDoc(doc(db, 'users', u.uid), { isOnline: false }).catch(()=>{});
+      }
+      await signOut(auth);
+      router.push('/login');
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -50,7 +63,6 @@ export default function Page(){
         }
         setCurrentUser({...data, uid: u.uid });
 
-        // عداد طلبات الصداقة لايف
         const qReq = query(collection(db,'friendRequests'), where('to','==', u.uid), where('status','==','pending'));
         const unsubReq = onSnapshot(qReq, s=> setReqCount(s.size));
         return ()=> unsubReq();
@@ -81,7 +93,6 @@ export default function Page(){
       <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#122025] sticky top-0 z-50 border-b border-[#1A2E35]">
         <div className="flex items-center gap-3">
           <Link href={`/profile/${currentUser?.uid}`}><img src={currentUser?.photoURL || `https://i.pravatar.cc/100?img=15`} className="w-9 h-9 rounded-full border-2 border-[#00E5FF]"/></Link>
-          {/* زرار الاصدقاء موبايل */}
           <Link href="/friends" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
             <Users className="w-5 h-5 text-white"/>
             {reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{reqCount}</span>}
@@ -141,8 +152,8 @@ export default function Page(){
           </div>
         </main>
 
-        {/* RIGHT SIDEBAR - ضفنا رابط الاصدقاء هنا */}
-        <aside className="hidden lg:block w-[320px] bg-[#122025] h-screen sticky top-0 p-4 border-r border-[#1A2E35]">
+        {/* RIGHT SIDEBAR */}
+        <aside className="hidden lg:block w-[320px] bg-[#122025] h-screen sticky top-0 p-4 border-r border-[#1A2E35] overflow-y-auto scrollbar-hide">
           <div className="flex items-center gap-2 mb-6"><div className="w-10 h-10 bg-[#00E5FF] rounded-xl flex items-center justify-center font-black text-black text-xl">P</div><div><h1 className="font-black text-xl leading-none">Postatee</h1><p className="text-[8px] text-gray-400">منصة سودانية لكل السودانيين حول العالم</p></div></div>
           <div className="relative mb-6"><input placeholder="ابحث عن أصدقاء، منشورات، صفحات..." className="w-full bg-[#0B1418] border border-[#1A2E35] rounded-full py-2.5 pr-4 pl-10 text-sm"/><span className="absolute left-3 top-2.5">🔍</span></div>
           <div className="space-y-1">
@@ -153,16 +164,27 @@ export default function Page(){
             </Link>
             <div className="p-3 text-gray-300">🧭 استكشف</div><div className="p-3 text-gray-300">👥 المجموعات</div><div className="p-3 text-gray-300">📄 الصفحات</div><div className="p-3 text-gray-300">💬 الرسائل</div><div className="p-3 text-gray-300">🔔 الإشعارات</div>
           </div>
+
+          {/* زر تسجيل الخروج - جديد */}
+          <div className="mt-8 pt-6 border-t border-[#1A2E35]">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold transition"
+            >
+              <LogOut className="w-5 h-5" />
+              تسجيل خروج
+            </button>
+          </div>
         </aside>
       </div>
 
-      {/* MOBILE BOTTOM NAV - ضفنا الاصدقاء هنا كمان */}
+      {/* MOBILE BOTTOM NAV */}
       <nav className="lg:hidden fixed bottom-0 w-full bg-[#122025] border-t border-[#1A2E35] flex justify-around items-center py-2 z-50">
         <Link href={`/profile/${currentUser?.uid}`} className="flex flex-col items-center text-gray-400"><span className="text-xl">👤</span><span className="text-[10px]">الملف الشخصي</span></Link>
         <Link href="/friends" className="flex flex-col items-center text-gray-400 relative"><span className="text-xl"><Users className="w-5 h-5"/></span><span className="text-[10px]">الأصدقاء</span>{reqCount>0 && <span className="absolute -top-1 right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
         <button className="flex flex-col items-center"><div className="w-14 h-14 bg-[#00E5FF] rounded-full flex items-center justify-center -mt-8 border-4 border-[#0B1418] text-black text-2xl font-bold">+</div><span className="text-[10px] font-bold">إنشاء منشور</span></button>
         <button className="flex flex-col items-center text-gray-400"><span className="text-xl">👥</span><span className="text-[10px]">المجموعات</span></button>
-        <button className="flex flex-col items-center text-[#00E5FF]"><span className="text-xl">🏠</span><span className="text-[10px]">الصفحة الرئيسية</span></button>
+        <button onClick={handleLogout} className="flex flex-col items-center text-red-400"><span className="text-xl"><LogOut className="w-5 h-5"/></span><span className="text-[10px]">خروج</span></button>
       </nav>
     </div>
   )
