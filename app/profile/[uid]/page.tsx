@@ -1,116 +1,191 @@
 "use client"
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { db, auth } from "@/lib/firebase";
-import { doc, onSnapshot, setDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
+import { useState, useEffect, useRef } from "react";
+import { db, auth } from "../../lib/firebase";
+import { doc, collection, getDocs, query, where, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, FileText, Images, LayoutGrid, MessageCircle, Send } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
 
-export default function ProfilePage(){
-  const { uid: targetUid } = useParams() as {uid:string};
-  const router = useRouter();
-  const [myUid, setMyUid] = useState<string|null>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [friendStatus, setFriendStatus] = useState<"none"|"pending_sent"|"pending_received"|"accepted">("none");
-  const [stats, setStats] = useState({ friends:0, posts:0, photos:0, videos:0 });
+const getNameColor = (role:string) => {
+  if(role === "مؤسس") return "text-cyan-400";
+  if(role === "شخصية هامة") return "text-red-400";
+  if(role === "شارة خضراء") return "text-green-400";
+  if(role === "مالك") return "text-cyan-300";
+  return "text-white";
+};
+const RoleBadge = ({ role }: { role: string }) => {
+  if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[11px] font-black px-2.5 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
+  if (role === "مؤسس") return <span className="inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/50 text-cyan-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Gem className="w-3 h-3"/> مؤسس</span>;
+  if (role === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[11px] font-black px-2.5 py-0.5 rounded-full"><Star className="w-3 h-3 fill-red-400"/> هامة</span>;
+  if (role === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Verified className="w-3 h-3"/> موثق</span>;
+  return null;
+};
+
+export default function ProfileWall() {
+  const { uid } = useParams();
+  const targetUid = uid as string;
+  const [user, setUser] = useState<any>(null);
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
-  const [filter, setFilter] = useState<"all"|"photo"|"video"|"text">("all");
+  const [isMine, setIsMine] = useState(false);
+  const [myUid, setMyUid] = useState<string|null>(null);
+  const [friendStatus, setFriendStatus] = useState<'none'|'pending_sent'|'pending_received'|'friends'|'loading'>('none');
+  const [requestId, setRequestId] = useState<string|null>(null);
+  const [friendsCount, setFriendsCount] = useState(0);
+  const [tab, setTab] = useState<'all'|'media'|'text'>('all');
+  const [chatExists, setChatExists] = useState(false);
+  const [msgRequestStatus, setMsgRequestStatus] = useState<'none'|'pending'>('none');
+  const [showMsgInput, setShowMsgInput] = useState(false);
+  const [firstMessage, setFirstMessage] = useState("");
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const coverInput = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
-  useEffect(()=> onAuthStateChanged(auth, u=> setMyUid(u?.uid||null)),[]);
-  useEffect(()=>{ if(!targetUid) return; return onSnapshot(doc(db,"users",targetUid), s=> setProfile(s.data())); },[targetUid]);
-
-  useEffect(()=>{
+  useEffect(() => {
     if(!targetUid) return;
-    const fetchStats = async()=>{
-      const q1 = query(collection(db,"friendRequests"), where("status","==","accepted"));
-      const snap1 = await getDocs(q1);
-      let count=0; snap1.forEach(d=>{ const data=d.data() as any; if(data.from===targetUid || data.to===targetUid) count++; });
-      const q2 = query(collection(db,"posts"), where("uid","==",targetUid));
-      const snap2 = await getDocs(q2);
-      const allPosts:any[]=[]; let photos=0, videos=0;
-      snap2.forEach(d=>{ const p=d.data(); allPosts.push({id:d.id,...p}); if(p.type==="photo"||p.image) photos++; if(p.type==="video"||p.video) videos++; });
-      setStats({friends:count, posts:allPosts.length, photos, videos}); setPosts(allPosts);
-    }; fetchStats();
-  },[targetUid]);
-
-  useEffect(()=>{
-    if(!myUid ||!targetUid || myUid===targetUid) return;
-    const id1 = `${myUid}_${targetUid}`; const id2 = `${targetUid}_${myUid}`;
-    const unsub1 = onSnapshot(doc(db,"friendRequests",id1), s=>{
-      if(s.exists()){ const d=s.data() as any; setFriendStatus(d.status==="accepted"?"accepted":"pending_sent"); }
+    const unsubUser = onSnapshot(doc(db, 'users', targetUid), (snap) => { if (snap.exists()) setUser(snap.data()); });
+    const unsubAuth = onAuthStateChanged(auth, async (me) => {
+      if (me) {
+        setMyUid(me.uid);
+        const mySnap = await getDoc(doc(db,'users',me.uid));
+        if(mySnap.exists()) setCurrentUserData(mySnap.data());
+        setIsMine(me.uid === targetUid);
+      }
+      const postsRef = collection(db, 'posts');
+      const q1 = await getDocs(query(postsRef, where('uid','==', targetUid)));
+      const q2 = await getDocs(query(postsRef, where('authorId','==', targetUid)));
+      const all = [...q1.docs,...q2.docs];
+      const unique = Array.from(new Map(all.map(d=>[d.id, {id:d.id,...d.data()}])).values());
+      unique.sort((a:any,b:any)=> (b.created_at?.seconds||0) - (a.created_at?.seconds||0));
+      setPosts(unique as any[]);
     });
-    const unsub2 = onSnapshot(doc(db,"friendRequests",id2), s=>{
-      if(s.exists()){ const d=s.data() as any; if(d.status==="pending") setFriendStatus("pending_received"); if(d.status==="accepted") setFriendStatus("accepted"); }
-    });
-    return ()=>{unsub1(); unsub2();};
-  },[myUid, targetUid]);
+    return () => { unsubUser(); unsubAuth(); };
+  }, [targetUid]);
 
-  const handleAdd = async()=>{ if(!myUid) return; await setDoc(doc(db,"friendRequests",`${myUid}_${targetUid}`),{ from:myUid, to:targetUid, status:"pending", createdAt:serverTimestamp() }); setFriendStatus("pending_sent"); };
+  useEffect(() => {
+    if(!myUid ||!targetUid || myUid === targetUid) return;
+    const friendDocId = [myUid, targetUid].sort().join('_');
+    const unsubFriend = onSnapshot(doc(db, 'friends', friendDocId), (snap)=>{ setFriendStatus(snap.exists()? 'friends' : 'none'); });
+    const qSent = query(collection(db,'friendRequests'), where('from','==',myUid), where('to','==',targetUid), where('status','==','pending'));
+    const qReceived = query(collection(db,'friendRequests'), where('from','==',targetUid), where('to','==',myUid), where('status','==','pending'));
+    const unsubSent = onSnapshot(qSent, (snap)=>{ if(!snap.empty){ setFriendStatus('pending_sent'); setRequestId(snap.docs[0].id); } });
+    const unsubReceived = onSnapshot(qReceived, (snap)=>{ if(!snap.empty){ setFriendStatus('pending_received'); setRequestId(snap.docs[0].id); } });
+    const unsubCount = onSnapshot(query(collection(db,'friends'), where('users','array-contains', targetUid)), (snap)=> setFriendsCount(snap.size));
+    const unsubChat = onSnapshot(doc(db,'chats',friendDocId), (snap)=> setChatExists(snap.exists()));
+    const unsubMsgReq = onSnapshot(query(collection(db,'messageRequests'), where('from','==', myUid), where('to','==', targetUid), where('status','==','pending')), (snap)=> setMsgRequestStatus(snap.empty? 'none' : 'pending'));
+    return ()=>{ unsubFriend(); unsubSent(); unsubReceived(); unsubCount(); unsubChat(); unsubMsgReq(); };
+  }, [myUid, targetUid]);
 
-  if(!profile) return <div className="min-h-screen bg-[#0a0e0e] flex items-center justify-center text-white/50 text-sm">جاري التحميل...</div>;
-  const isOther = myUid && targetUid && myUid!==targetUid;
-  const filtered = posts.filter(p=>{ if(filter==="all") return true; if(filter==="photo") return p.image; if(filter==="video") return p.video; if(filter==="text") return!p.image&&!p.video; return true; });
+  const handleSend = async ()=>{
+    if(!myUid ||!targetUid) return;
+    await addDoc(collection(db,'friendRequests'), { from: myUid, to: targetUid, status:'pending', created_at: serverTimestamp() });
+    setFriendStatus('pending_sent');
+  };
+  const handleAccept = async ()=>{
+    if(!myUid ||!targetUid ||!requestId) return;
+    const friendDocId = [myUid, targetUid].sort().join('_');
+    await setDoc(doc(db,'friends', friendDocId), { users:[myUid, targetUid], created_at: serverTimestamp() });
+    await deleteDoc(doc(db,'friendRequests', requestId));
+    setFriendStatus('friends');
+  };
+  const handleCancel = async ()=>{
+    if(!requestId) return;
+    await deleteDoc(doc(db,'friendRequests', requestId));
+    setFriendStatus('none'); setRequestId(null);
+  };
+  const handleUnfriend = async ()=>{
+    if(!myUid ||!targetUid) return;
+    await deleteDoc(doc(db,'friends', [myUid, targetUid].sort().join('_')));
+    setFriendStatus('none');
+  };
+  const handleMessageClick = async()=>{
+    if(!myUid ||!targetUid) return;
+    const chatId = [myUid, targetUid].sort().join('_');
+    if(friendStatus==='friends' || chatExists){
+      const chatSnap = await getDoc(doc(db,'chats',chatId));
+      if(!chatSnap.exists()){
+        await setDoc(doc(db,'chats',chatId),{ members:[myUid, targetUid], membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } }, created_at: serverTimestamp(), updated_at: serverTimestamp(), lastMessage: "" });
+      }
+      router.push(`/messages?chatId=${chatId}`);
+    } else {
+      setShowMsgInput(true);
+    }
+  };
+  const sendMessageRequest = async()=>{
+    if(!firstMessage.trim() ||!myUid ||!targetUid) return;
+    await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName, fromAvatar: currentUserData?.avatar, toName: user?.displayName, firstMessage, status: 'pending', created_at: serverTimestamp() });
+    setFirstMessage(""); setShowMsgInput(false); setMsgRequestStatus('pending');
+  };
+  const handleUpload = async (e:any, type:'avatar'|'cover') => {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => { await updateDoc(doc(db, 'users', targetUid), { [type]: ev.target?.result as string }); };
+    reader.readAsDataURL(file);
+  };
+
+  if (!user) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري تحميل الحائط...</div>;
+  const filteredPosts = posts.filter((p:any)=>{ if(tab==='all') return true; if(tab==='media') return p.image || p.video || p.media; if(tab==='text') return!p.image &&!p.video &&!p.media; return true; });
 
   return (
-    <div dir="rtl" className="min-h-screen bg-[#0a0e0e] text-white">
-      <div className="w-full max-w-[720px] mx-auto">
+    <div className="min-h-screen bg-[#050a0a]" dir="rtl">
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap'); *{font-family:'Tajawal',sans-serif!important;}`}</style>
+      <header className="sticky top-0 z-50 h-[56px] bg-[#050a0a]/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-4">
+        <button onClick={()=>router.push('/')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><ArrowLeft className="w-5 h-5 text-white"/></button>
+        <span className={`font-black ${getNameColor(user.role)}`}>{user.displayName}</span>
+        <div className="w-9"/>
+      </header>
 
-        {/* الغلاف */}
-        <div className="relative h-[220px] md:h-[280px] w-full overflow-hidden">
-          <img src={profile.cover || "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200"} className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e0e] via-[#0a0e0e]/20 to-transparent" />
-        </div>
-
-        {/* المعلومات */}
-        <div className="px-5 -mt-14 relative z-10">
+      <div className="relative h-[200px] w-full bg-white/5">
+        {user.cover? <img src={user.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
+        {isMine && (<><button onClick={()=>coverInput.current?.click()} className="absolute bottom-4 left-4 bg-black/60 p-2.5 rounded-full border border-white/20"><Camera className="w-5 h-5 text-white"/></button><input ref={coverInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'cover')}/></>)}
+        <div className="absolute -bottom-14 right-6 left-6 flex items-end justify-between">
           <div className="flex items-end gap-4">
-            <img src={profile.avatar || profile.photoURL} className="w-[88px] h-[88px] rounded-full border-[4px] border-[#0a0e0e] bg-zinc-800 object-cover shadow-xl" />
-            <div className="pb-2">
-              <h1 className="text-[20px] font-black leading-none">{profile.displayName || "Hashem Abbas"}</h1>
-              <p className="text-[13px] text-white/40 mt-1">@{profile.username} • {profile.role || "مستخدم"}</p>
-            </div>
+            <div className="relative"><div className="w-24 h-24 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden">{user.avatar? <img src={user.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}</div>{isMine && (<><button onClick={()=>avatarInput.current?.click()} className="absolute -bottom-1 -left-1 bg-white p-1.5 rounded-full"><Camera className="w-4 h-4 text-black"/></button><input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'avatar')}/></>)}</div>
+            <div className="pb-2"><div className="flex items-center gap-2"><h1 className={`text-xl font-black ${getNameColor(user.role)}`}>{user.displayName}</h1><RoleBadge role={user.role}/></div><p className="text-white/50 text-xs mt-1">@{user.username} • {friendsCount} صديق</p></div>
           </div>
 
-          {/* الإحصائيات - تصميم مرتب */}
-          <div className="flex items-center justify-between mt-6 bg-white/[0.03] border border-white/[0.06] rounded-[20px] px-2 py-3">
-            <div className="flex-1 text-center"><p className="font-black text-[18px]">{stats.friends}</p><p className="text-[11px] text-white/35">صديق</p></div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="flex-1 text-center"><p className="font-black text-[18px]">{stats.posts}</p><p className="text-[11px] text-white/35">منشور</p></div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="flex-1 text-center"><p className="font-black text-[18px]">{stats.photos}</p><p className="text-[11px] text-white/35">صور</p></div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="flex-1 text-center"><p className="font-black text-[18px]">{stats.videos}</p><p className="text-[11px] text-white/35">فيديو</p></div>
-          </div>
-
-          {/* الزرين - مقاس منطقي */}
-          {isOther && (
-            <div className="flex gap-2.5 mt-5">
-              {friendStatus==="none" && <button onClick={handleAdd} className="flex-1 max-w-[180px] h-10 rounded-full bg-white text-black font-bold text-[13px] hover:bg-zinc-100 transition">إضافة صديق</button>}
-              {friendStatus==="pending_sent" && <button disabled className="flex-1 max-w-[180px] h-10 rounded-full bg-white/10 text-white/60 font-bold text-[13px]">تم الإرسال</button>}
-              {friendStatus==="accepted" && <button onClick={()=>router.push(`/chat/${targetUid}`)} className="flex-1 max-w-[180px] h-10 rounded-full bg-white text-black font-bold text-[13px]">مراسلة</button>}
-              {friendStatus==="pending_received" && <button className="flex-1 max-w-[180px] h-10 rounded-full bg-[#ffec8b] text-black font-bold text-[13px]">قبول الطلب</button>}
-
-              <button onClick={()=>router.push(`/chat/request/${targetUid}`)} className="flex-1 max-w-[180px] h-10 rounded-full bg-transparent border border-cyan-400/70 text-cyan-300 font-bold text-[13px] hover:bg-cyan-400/10 transition">طلب مراسلة</button>
+          {/* الزرين - مقاس منطقي ومظبوط */}
+          {!isMine && myUid && (
+            <div className="pb-2 flex gap-2 items-center">
+              {friendStatus==='friends'? (
+                <>
+                  <button onClick={handleUnfriend} className="h-9 px-4 rounded-full bg-white/[0.06] border border-white/10 text-white font-bold text-[12px] flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5"/> صديق</button>
+                  <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-[#00E5FF] text-black font-black text-[12px] flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5"/> مراسلة</button>
+                </>
+              ) : friendStatus==='pending_sent'? (
+                <>
+                  <button onClick={handleCancel} className="h-9 px-4 rounded-full bg-white/10 border border-white/15 text-white font-bold text-[12px] flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> تم الإرسال</button>
+                  <button onClick={handleMessageClick} className="h-9 px-4 rounded-full bg-transparent border border-cyan-400/40 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> {msgRequestStatus==='pending'?'تم الطلب':'طلب مراسلة'}</button>
+                </>
+              ) : friendStatus==='pending_received'? (
+                <div className="flex gap-2">
+                  <button onClick={handleAccept} className="h-9 px-4 rounded-full bg-green-500 text-white font-black text-[12px] flex items-center gap-1"><Check className="w-3.5 h-3.5"/> قبول</button>
+                  <button onClick={handleCancel} className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white"/></button>
+                  <button onClick={handleMessageClick} className="h-9 px-4 rounded-full bg-transparent border border-cyan-400/40 text-cyan-400 font-bold text-[12px]">طلب مراسلة</button>
+                </div>
+              ) : (
+                <>
+                  <button onClick={handleSend} className="h-9 px-5 rounded-full bg-white text-black font-black text-[12px] flex items-center gap-1.5 hover:bg-zinc-100 transition"><UserPlus className="w-3.5 h-3.5"/> إضافة صديق</button>
+                  <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5 hover:bg-cyan-400/10 transition"><Send className="w-3.5 h-3.5"/> طلب مراسلة</button>
+                </>
+              )}
             </div>
           )}
-
-          {/* فلاتر */}
-          <div className="flex gap-2 mt-6">
-            {[{k:"all",l:"الكل"},{k:"photo",l:`صور ${stats.photos}`},{k:"video",l:`فيديو ${stats.videos}`},{k:"text",l:"نصوص"}].map((t:any)=>(
-              <button key={t.k} onClick={()=>setFilter(t.k)} className={`h-8 px-4 rounded-full text-[12px] font-bold border transition ${filter===t.k?'bg-white text-black border-white':'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'}`}>{t.l}</button>
-            ))}
-          </div>
-
-          <div className="mt-6 pb-20 space-y-3">
-            {filtered.length===0 && <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-10 text-center text-white/25 text-sm">ما في منشورات</div>}
-            {filtered.map(p=>(
-              <div key={p.id} className="bg-white/[0.04] border border-white/[0.06] rounded-[18px] p-4">
-                <p className="text-[14px] leading-6 text-white/80">{p.text || p.caption}</p>
-                {p.image && <img src={p.image} className="mt-3 rounded-xl w-full max-h-[400px] object-cover" />}
-              </div>
-            ))}
-          </div>
         </div>
       </div>
+
+      {showMsgInput && (
+        <div className="max-w-[600px] mx-auto mt-20 px-3"><div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2"><input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${user.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none text-white"/><button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button><button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4 text-white"/></button></div></div>
+      )}
+
+      <div className="max-w-[600px] mx-auto mt-20 px-3 pb-20">
+        <div className="flex bg-white/[0.05] rounded-2xl p-1.5 gap-1.5 border border-white/10">
+          <button onClick={()=>setTab('all')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='all'?'bg-[#00E5FF] text-black':'text-white/50'}`}>الكل</button>
+          <button onClick={()=>setTab('media')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='media'?'bg-[#00E5FF] text-black':'text-white/50'}`}>وسائط</button>
+          <button onClick={()=>setTab('text')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='text'?'bg-[#00E5FF] text-black':'text-white/50'}`}>كتابة</button>
+        </div>
+        <div className="space-y-3 mt-4">{filteredPosts.map((p:any)=><div key={p.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4"><p className="text-[15px] text-white/90">{p.content}</p>{p.image && <img src={p.image} className="mt-3 rounded-xl w-full"/>}</div>)}</div>
+      </div>
     </div>
-  )
+  );
 }
