@@ -22,6 +22,7 @@ export default function Page(){
   const [openComments, setOpenComments] = useState<any>({});
   const [reqCount, setReqCount] = useState(0);
   const [notifCount, setNotifCount] = useState(0);
+  const [msgCount, setMsgCount] = useState(0);
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -36,6 +37,7 @@ export default function Page(){
   useEffect(() => {
     let unsubReq: any = null;
     let unsubNotif: any = null;
+    let unsubMsg: any = null;
     const unsub = onAuthStateChanged(auth, async (u) => {
       try {
         if (!u) { router.push('/login'); return; }
@@ -47,12 +49,22 @@ export default function Page(){
         }
         const data = snap.data();
         setCurrentUser({...data, uid: u.uid });
+
         unsubReq = onSnapshot(query(collection(db,'friendRequests'), where('to','==', u.uid), where('status','==','pending')), s=> setReqCount(s.size));
-        // هنا وحدنا الاسم toUid
-        unsubNotif = onSnapshot(query(collection(db,'notifications'), where('toUid','==', u.uid), where('read','==', false)), s=> setNotifCount(s.size));
+
+        unsubNotif = onSnapshot(query(collection(db,'notifications'), where('toUid','==', u.uid)), s=> {
+          const unread = s.docs.filter(d=> d.data().read === false).length;
+          setNotifCount(unread);
+        });
+
+        // عداد الرسائل الجديد - يقرا من chats
+        unsubMsg = onSnapshot(query(collection(db,'chats'), where('members','array-contains', u.uid)), s=>{
+          setMsgCount(s.size);
+        });
+
       } finally { setLoading(false); }
     });
-    return () => { unsub(); if(unsubReq) unsubReq(); if(unsubNotif) unsubNotif(); }
+    return () => { unsub(); if(unsubReq) unsubReq(); if(unsubNotif) unsubNotif(); if(unsubMsg) unsubMsg(); }
   }, [router]);
 
   useEffect(() => {
@@ -70,12 +82,12 @@ export default function Page(){
       @media(max-width:1023px){.desktop-header{display:none!important}.mobile-header{display:flex!important} }
       `}</style>
 
-      {/* لابتوب - ظاهر غصب */}
+      {/* لابتوب */}
       <header className="desktop-header items-center justify-between px-6 py-3 bg-[#122025] border-b border-[#1A2E35] max-w-[1600px] mx-auto w-full" style={{display:'flex'}}>
         <div className="flex items-center gap-4">
           <Link href={`/profile/${currentUser?.uid}`} className="flex items-center gap-2"><img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=15`} className="w-10 h-10 rounded-full border-2 border-[#00E5FF]"/><span className="font-bold text-sm">{currentUser?.displayName}</span></Link>
           <Link href="/friends" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Users className="w-5 h-5"/>{reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
-          <Link href="/messages" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-5 h-5"/></Link>
+          <Link href="/messages" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-5 h-5"/>{msgCount>0 && <span className="absolute -top-1 -right-1 bg-[#00E5FF] text-black text-[11px] w-5 h-5 rounded-full flex items-center justify-center font-bold">{msgCount>9?'+9':msgCount}</span>}</Link>
           <Link href="/notifications" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Bell className="w-5 h-5"/>{notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{notifCount}</span>}</Link>
         </div>
         <div className="flex items-center gap-3"><div><h1 className="font-black text-[22px] leading-none">Posta<span className="text-[#00E5FF]">tee</span></h1><p className="text-[9px] text-gray-400">منصة سودانية</p></div><div className="w-10 h-10 bg-[#00E5FF] rounded-xl flex items-center justify-center text-black font-black">P</div></div>
@@ -86,8 +98,8 @@ export default function Page(){
         <div className="flex items-center gap-3">
           <Link href={`/profile/${currentUser?.uid}`}><img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=15`} className="w-9 h-9 rounded-full border-2 border-[#00E5FF]"/></Link>
           <Link href="/friends" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><Users className="w-5 h-5"/>{reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
+          <Link href="/messages" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-5 h-5"/>{msgCount>0 && <span className="absolute -top-1 -right-1 bg-[#00E5FF] text-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{msgCount}</span>}</Link>
           <Link href="/notifications" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><Bell className="w-5 h-5"/>{notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{notifCount}</span>}</Link>
-          <Link href="/messages" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-5 h-5"/></Link>
         </div>
         <div className="flex items-center gap-2"><h1 className="font-black text-[20px]">Posta<span className="text-[#00E5FF]">tee</span></h1><div className="w-8 h-8 bg-[#00E5FF] rounded-lg flex items-center justify-center text-black font-black">P</div></div>
       </header>
