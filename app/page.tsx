@@ -5,7 +5,7 @@ import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, setDoc,
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, LogOut } from "lucide-react";
+import { Users, LogOut, Bell } from "lucide-react";
 import CreatePost from "../components/feed/CreatePost";
 import PostCard from "../components/feed/PostCard";
 import Stories from "../components/feed/Stories";
@@ -21,6 +21,7 @@ export default function Page(){
   const [commentText, setCommentText] = useState<any>({});
   const [openComments, setOpenComments] = useState<any>({});
   const [reqCount, setReqCount] = useState(0);
+  const [notifCount, setNotifCount] = useState(0);
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -37,6 +38,9 @@ export default function Page(){
   };
 
   useEffect(() => {
+    let unsubReq: any = null;
+    let unsubNotif: any = null;
+
     const unsub = onAuthStateChanged(auth, async (u) => {
       try {
         if (!u) { router.push('/login'); return; }
@@ -63,9 +67,13 @@ export default function Page(){
         }
         setCurrentUser({...data, uid: u.uid });
 
+        // طلبات الصداقة
         const qReq = query(collection(db,'friendRequests'), where('to','==', u.uid), where('status','==','pending'));
-        const unsubReq = onSnapshot(qReq, s=> setReqCount(s.size));
-        return ()=> unsubReq();
+        unsubReq = onSnapshot(qReq, s=> setReqCount(s.size));
+
+        // الإشعارات الحقيقية - toUid + read == false
+        const qNotif = query(collection(db,'notifications'), where('toUid','==', u.uid), where('read','==', false));
+        unsubNotif = onSnapshot(qNotif, s=> setNotifCount(s.size));
 
       } catch (e) {
         console.error("Auth error:", e);
@@ -73,7 +81,11 @@ export default function Page(){
         setLoading(false);
       }
     });
-    return () => unsub();
+    return () => {
+      unsub();
+      if(unsubReq) unsubReq();
+      if(unsubNotif) unsubNotif();
+    }
   }, [router]);
 
   useEffect(() => {
@@ -97,8 +109,10 @@ export default function Page(){
             <Users className="w-5 h-5 text-white"/>
             {reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{reqCount}</span>}
           </Link>
-          <span className="relative text-xl">🔔</span>
-          <span className="relative text-xl">💬</span>
+          <Link href="/notifications" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
+            <Bell className="w-5 h-5 text-white"/>
+            {notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{notifCount}</span>}
+          </Link>
         </div>
         <div className="flex items-center gap-2">
           <div><h1 className="font-black text-[20px] leading-none">Posta<span className="text-[#00E5FF]">tee</span></h1><p className="text-[8px] text-gray-400">منصة سودانية لكل السودانيين</p></div>
@@ -162,10 +176,16 @@ export default function Page(){
               <span className="flex items-center gap-2"><Users className="w-5 h-5"/> الأصدقاء</span>
               {reqCount>0 && <span className="bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full">{reqCount}</span>}
             </Link>
-            <div className="p-3 text-gray-300">🧭 استكشف</div><div className="p-3 text-gray-300">👥 المجموعات</div><div className="p-3 text-gray-300">📄 الصفحات</div><div className="p-3 text-gray-300">💬 الرسائل</div><div className="p-3 text-gray-300">🔔 الإشعارات</div>
+            <div className="p-3 text-gray-300">🧭 استكشف</div>
+            <div className="p-3 text-gray-300">👥 المجموعات</div>
+            <div className="p-3 text-gray-300">📄 الصفحات</div>
+            <div className="p-3 text-gray-300">💬 الرسائل</div>
+            <Link href="/notifications" className="p-3 text-gray-300 flex items-center justify-between rounded-xl hover:bg-[#1A2E35] transition-all">
+              <span className="flex items-center gap-2"><Bell className="w-5 h-5"/> الإشعارات</span>
+              {notifCount>0 && <span className="bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full animate-pulse">{notifCount}</span>}
+            </Link>
           </div>
 
-          {/* زر تسجيل الخروج - جديد */}
           <div className="mt-8 pt-6 border-t border-[#1A2E35]">
             <button
               onClick={handleLogout}
@@ -183,7 +203,7 @@ export default function Page(){
         <Link href={`/profile/${currentUser?.uid}`} className="flex flex-col items-center text-gray-400"><span className="text-xl">👤</span><span className="text-[10px]">الملف الشخصي</span></Link>
         <Link href="/friends" className="flex flex-col items-center text-gray-400 relative"><span className="text-xl"><Users className="w-5 h-5"/></span><span className="text-[10px]">الأصدقاء</span>{reqCount>0 && <span className="absolute -top-1 right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
         <button className="flex flex-col items-center"><div className="w-14 h-14 bg-[#00E5FF] rounded-full flex items-center justify-center -mt-8 border-4 border-[#0B1418] text-black text-2xl font-bold">+</div><span className="text-[10px] font-bold">إنشاء منشور</span></button>
-        <button className="flex flex-col items-center text-gray-400"><span className="text-xl">👥</span><span className="text-[10px]">المجموعات</span></button>
+        <Link href="/notifications" className="flex flex-col items-center text-gray-400 relative"><span className="text-xl"><Bell className="w-5 h-5"/></span><span className="text-[10px]">الإشعارات</span>{notifCount>0 && <span className="absolute -top-1 right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-pulse">{notifCount}</span>}</Link>
         <button onClick={handleLogout} className="flex flex-col items-center text-red-400"><span className="text-xl"><LogOut className="w-5 h-5"/></span><span className="text-[10px]">خروج</span></button>
       </nav>
     </div>

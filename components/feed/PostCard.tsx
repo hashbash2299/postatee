@@ -66,18 +66,22 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
 
   const createNotification = async (type:'like'|'comment') => {
     const postOwnerId = post.authorId || post.uid;
-    if(postOwnerId === currentUser.uid) return; // ما ترسل اشعار لنفسك
-    await addDoc(collection(db, 'notifications'), {
-      toUid: postOwnerId,
-      fromUid: currentUser.uid,
-      fromName: currentUser.displayName,
-      fromAvatar: currentUser.avatar,
-      type: type,
-      postId: post.id,
-      postContent: post.content?.slice(0,40) || '',
-      read: false,
-      created_at: serverTimestamp()
-    });
+    if(!postOwnerId || postOwnerId === currentUser.uid) return;
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        toUid: postOwnerId,
+        fromUid: currentUser.uid,
+        fromName: currentUser.displayName || currentUser.username || 'مستخدم',
+        fromAvatar: currentUser.photoURL || currentUser.avatar || currentUser.photo || `https://i.pravatar.cc/100?u=${currentUser.uid}`,
+        type: type,
+        postId: post.id,
+        postContent: post.content?.slice(0,50) || '',
+        read: false,
+        created_at: serverTimestamp()
+      });
+    } catch(e) {
+      console.log("notification error", e);
+    }
   };
 
   const handleLike = async()=>{
@@ -92,8 +96,18 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
   };
 
   const handleComment = async()=>{
-    const txt = commentText[post.id]; if(!txt?.trim()) return;
-    await addDoc(collection(db,'posts',post.id,'comments'), { text: txt, created_at: serverTimestamp(), uid: currentUser.uid, authorId: currentUser.uid, authorName: currentUser.displayName, authorAvatar: currentUser.avatar, authorRole: currentUser.role || "", authorUsername: currentUser.username });
+    const txt = commentText[post.id]; 
+    if(!txt?.trim()) return;
+    await addDoc(collection(db,'posts',post.id,'comments'), { 
+      text: txt, 
+      created_at: serverTimestamp(), 
+      uid: currentUser.uid, 
+      authorId: currentUser.uid, 
+      authorName: currentUser.displayName, 
+      authorAvatar: currentUser.photoURL || currentUser.avatar, 
+      authorRole: currentUser.role || "", 
+      authorUsername: currentUser.username 
+    });
     await updateDoc(doc(db,'posts',post.id), { commentsCount: increment(1) });
     await createNotification('comment');
     setCommentText((prev:any)=>({...prev,[post.id]:""}));
@@ -126,7 +140,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       {openComments[post.id] && (
         <div className="mt-3 border-t border-white/5 pt-3">
           <div className="flex gap-2">
-            <img src={currentUser?.avatar} className="w-7 h-7 rounded-full"/>
+            <img src={currentUser?.photoURL || currentUser?.avatar} className="w-7 h-7 rounded-full"/>
             <div className="flex-1 flex gap-2">
               <input value={commentText[post.id]||""} onChange={e=>setCommentText((prev:any)=>({...prev,[post.id]:e.target.value}))} placeholder="اكتب تعليق..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-sm outline-none"/>
               <button onClick={handleComment} className="bg-violet-500 text-white rounded-full w-8 h-8 flex items-center justify-center"><Send className="w-4 h-4"/></button>
