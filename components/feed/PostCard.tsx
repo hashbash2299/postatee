@@ -64,20 +64,24 @@ function CommentsList({ postId }: any){
 
 export default function PostCard({ post, currentUser, onHide, onStartEdit, isEditing, editingContent, setEditingContent, onSaveEdit, onCancelEdit, commentText, setCommentText, openComments, setOpenComments }: any){
 
-  const createNotification = async (type:'like'|'comment') => {
+  const createNotification = async (type:'like'|'comment', extraText:string = '') => {
     const postOwnerId = post.authorId || post.uid;
     if(!postOwnerId || postOwnerId === currentUser.uid) return;
     try {
       await addDoc(collection(db, 'notifications'), {
         toUid: postOwnerId,
+        to: postOwnerId,
         fromUid: currentUser.uid,
         fromName: currentUser.displayName || currentUser.username || 'مستخدم',
+        fromPhoto: currentUser.photoURL || currentUser.avatar || currentUser.photo || `https://i.pravatar.cc/100?u=${currentUser.uid}`,
         fromAvatar: currentUser.photoURL || currentUser.avatar || currentUser.photo || `https://i.pravatar.cc/100?u=${currentUser.uid}`,
         type: type,
         postId: post.id,
         postContent: post.content?.slice(0,50) || '',
+        text: type === 'like' ? 'أعجب بمنشورك' : `علق على منشورك: ${extraText.slice(0,30)}`,
         read: false,
-        created_at: serverTimestamp()
+        created_at: serverTimestamp(),
+        createdAt: serverTimestamp()
       });
     } catch(e) {
       console.log("notification error", e);
@@ -109,7 +113,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       authorUsername: currentUser.username 
     });
     await updateDoc(doc(db,'posts',post.id), { commentsCount: increment(1) });
-    await createNotification('comment');
+    await createNotification('comment', txt);
     setCommentText((prev:any)=>({...prev,[post.id]:""}));
   };
 
@@ -130,6 +134,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       )}
 
       {post.image && <img src={post.image} className="mt-3 rounded-xl w-full"/>}
+      {post.video && <video src={post.video} controls className="mt-3 rounded-xl w-full bg-black"/>}
 
       <div className="flex justify-between mt-4 pt-3 border-t border-white/5">
         <button onClick={handleLike} className={`flex gap-1.5 text-sm items-center ${post.likes?.includes(currentUser?.uid)?'text-red-500':'text-white/50'}`}><Heart className={`w-5 h-5 ${post.likes?.includes(currentUser?.uid)?'fill-red-500':''}`}/> {post.likesCount||0}</button>
@@ -140,7 +145,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       {openComments[post.id] && (
         <div className="mt-3 border-t border-white/5 pt-3">
           <div className="flex gap-2">
-            <img src={currentUser?.photoURL || currentUser?.avatar} className="w-7 h-7 rounded-full"/>
+            <img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=12`} className="w-7 h-7 rounded-full"/>
             <div className="flex-1 flex gap-2">
               <input value={commentText[post.id]||""} onChange={e=>setCommentText((prev:any)=>({...prev,[post.id]:e.target.value}))} placeholder="اكتب تعليق..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-sm outline-none"/>
               <button onClick={handleComment} className="bg-violet-500 text-white rounded-full w-8 h-8 flex items-center justify-center"><Send className="w-4 h-4"/></button>
