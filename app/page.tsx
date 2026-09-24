@@ -40,7 +40,6 @@ export default function Page(){
   useEffect(() => {
     let unsubReq: any = null;
     let unsubNotif: any = null;
-
     const unsub = onAuthStateChanged(auth, async (u) => {
       try {
         if (!u) { router.push('/login'); return; }
@@ -67,11 +66,9 @@ export default function Page(){
         }
         setCurrentUser({...data, uid: u.uid });
 
-        // طلبات الصداقة
         const qReq = query(collection(db,'friendRequests'), where('to','==', u.uid), where('status','==','pending'));
         unsubReq = onSnapshot(qReq, s=> setReqCount(s.size));
 
-        // الإشعارات الحقيقية - toUid + read == false
         const qNotif = query(collection(db,'notifications'), where('toUid','==', u.uid), where('read','==', false));
         unsubNotif = onSnapshot(qNotif, s=> setNotifCount(s.size));
 
@@ -101,8 +98,8 @@ export default function Page(){
       <TickerBar />
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@700;800&display=swap'); *{font-family:'Tajawal',sans-serif!important}.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
 
-      {/* MOBILE HEADER */}
-      <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#122025] sticky top-0 z-50 border-b border-[#1A2E35]">
+      {/* MOBILE HEADER - صلحناهو هنا */}
+      <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#122025] sticky top-0 z-40 border-b border-[#1A2E35]">
         <div className="flex items-center gap-3">
           <Link href={`/profile/${currentUser?.uid}`}><img src={currentUser?.photoURL || `https://i.pravatar.cc/100?img=15`} className="w-9 h-9 rounded-full border-2 border-[#00E5FF]"/></Link>
           <Link href="/friends" className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
@@ -121,7 +118,7 @@ export default function Page(){
       </header>
 
       <div className="flex max-w-[1600px] mx-auto">
-        <aside className="hidden lg:flex w-[300px] bg-[#122025] h-screen sticky top-0 flex-col p-4 overflow-y-auto scrollbar-hide border-l border-[#1A2E35]">
+        <aside className="hidden lg:flex w-[300px] bg-[#122025] h-[calc(100vh-28px)] sticky top-[28px] flex-col p-4 overflow-y-auto scrollbar-hide border-l border-[#1A2E35]">
           <div className="flex items-center gap-3 mb-6">
             <Link href={`/profile/${currentUser?.uid}`}><img src={currentUser?.photoURL || "https://i.pravatar.cc/100?img=15"} className="w-12 h-12 rounded-full"/></Link>
             <div><p className="font-bold">{currentUser?.displayName || 'محمد أحمد'}</p><Link href={`/profile/${currentUser?.uid}`} className="text-xs text-[#00E5FF]">عرض ملفي الشخصي</Link></div>
@@ -166,8 +163,7 @@ export default function Page(){
           </div>
         </main>
 
-        {/* RIGHT SIDEBAR */}
-        <aside className="hidden lg:block w-[320px] bg-[#122025] h-screen sticky top-0 p-4 border-r border-[#1A2E35] overflow-y-auto scrollbar-hide">
+        <aside className="hidden lg:block w-[320px] bg-[#122025] h-[calc(100vh-28px)] sticky top-[28px] p-4 border-r border-[#1A2E35] overflow-y-auto scrollbar-hide">
           <div className="flex items-center gap-2 mb-6"><div className="w-10 h-10 bg-[#00E5FF] rounded-xl flex items-center justify-center font-black text-black text-xl">P</div><div><h1 className="font-black text-xl leading-none">Postatee</h1><p className="text-[8px] text-gray-400">منصة سودانية لكل السودانيين حول العالم</p></div></div>
           <div className="relative mb-6"><input placeholder="ابحث عن أصدقاء، منشورات، صفحات..." className="w-full bg-[#0B1418] border border-[#1A2E35] rounded-full py-2.5 pr-4 pl-10 text-sm"/><span className="absolute left-3 top-2.5">🔍</span></div>
           <div className="space-y-1">
@@ -185,20 +181,14 @@ export default function Page(){
               {notifCount>0 && <span className="bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full animate-pulse">{notifCount}</span>}
             </Link>
           </div>
-
           <div className="mt-8 pt-6 border-t border-[#1A2E35]">
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold transition"
-            >
-              <LogOut className="w-5 h-5" />
-              تسجيل خروج
+            <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold transition">
+              <LogOut className="w-5 h-5" /> تسجيل خروج
             </button>
           </div>
         </aside>
       </div>
 
-      {/* MOBILE BOTTOM NAV */}
       <nav className="lg:hidden fixed bottom-0 w-full bg-[#122025] border-t border-[#1A2E35] flex justify-around items-center py-2 z-50">
         <Link href={`/profile/${currentUser?.uid}`} className="flex flex-col items-center text-gray-400"><span className="text-xl">👤</span><span className="text-[10px]">الملف الشخصي</span></Link>
         <Link href="/friends" className="flex flex-col items-center text-gray-400 relative"><span className="text-xl"><Users className="w-5 h-5"/></span><span className="text-[10px]">الأصدقاء</span>{reqCount>0 && <span className="absolute -top-1 right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
