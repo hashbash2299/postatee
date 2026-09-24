@@ -6,7 +6,7 @@ import { onAuthStateChanged } from "firebase/auth"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Send, User, Smile, CheckCheck } from "lucide-react"
 
-const EMOJIS = ["❤️","😂","😍","😭","😅","👍","🙏","🔥","💔","😎","🥺","🤣","😁","😘"]
+const EMOJIS = ["❤️","😂","😍","😭","😅","👍","🙏","🔥","💔","😎","🥺","🤣","😁","😘","👌","👏","😁"]
 
 export default function MessageRoom(){
   const params = useParams()
@@ -29,7 +29,6 @@ export default function MessageRoom(){
       setMyUid(u.uid)
       const mySnap = await getDoc(doc(db,'users',u.uid))
       if(mySnap.exists()) setMyData(mySnap.data())
-
       let finalChatId = id
       let otherId = ""
       if(id.includes('_')){
@@ -53,7 +52,7 @@ export default function MessageRoom(){
       const q = query(collection(db,'chats',finalChatId,'messages'), orderBy('created_at','asc'))
       const unsubMsg = onSnapshot(q, async (snap)=>{
         setMessages(snap.docs.map(d=>({id:d.id,...d.data()})) as any[])
-        setTimeout(()=> bottomRef.current?.scrollIntoView({behavior:'smooth'}),100)
+        setTimeout(()=> bottomRef.current?.scrollIntoView({behavior:'smooth'}), 80)
         const unread = snap.docs.filter(d=> d.data().to===u.uid &&!d.data().read)
         if(unread.length>0){
           const batch = writeBatch(db)
@@ -68,7 +67,7 @@ export default function MessageRoom(){
 
   const handleSend = async ()=>{
     if(!text.trim() ||!myUid ||!chatId) return
-    const msg = text
+    const msg = text.trim()
     setText("")
     setShowEmoji(false)
     await addDoc(collection(db,'chats',chatId,'messages'),{ from:myUid, to:friendId, text:msg, read:false, reaction:null, created_at:serverTimestamp() })
@@ -81,75 +80,95 @@ export default function MessageRoom(){
   }
 
   return (
-    <div className="h-screen bg-[#050a0a] flex flex-col" dir="rtl">
-      <header className="h-[56px] bg-[#122025] border-b border-white/10 flex items-center gap-3 px-4">
+    <div className="h-[100dvh] bg-[#080e0e] flex flex-col" dir="rtl">
+      {/* Header */}
+      <header className="h-[56px] bg-[#122025] border-b border-white/10 flex items-center gap-3 px-4 shrink-0">
         <button onClick={()=>router.push('/messages')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><ArrowLeft className="w-5 h-5 text-white"/></button>
         {friendData?.avatar? <img src={friendData.avatar} className="w-8 h-8 rounded-full object-cover"/> : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><User className="w-4 h-4 text-white"/></div>}
-        <span className="font-bold text-white text-sm">{friendData?.displayName || 'محادثة'}</span>
+        <div className="flex flex-col">
+          <span className="font-bold text-white text-[14px]">{friendData?.displayName || 'محادثة'}</span>
+          <span className="text-[11px] text-white/40">متصل الآن</span>
+        </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 max-w-[600px] w-full mx-auto">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 max-w-[650px] w-full mx-auto bg-[#080e0e]">
         {messages.map(m=>{
           const isMe = m.from===myUid
           return (
-            <div key={m.id} className={`flex gap-2 items-end ${isMe?'justify-end':'justify-start'}`}>
-              {/* صورة الصديق على الشمال */}
-              {!isMe && (
-                friendData?.avatar? <img src={friendData.avatar} className="w-7 h-7 rounded-full object-cover mb-1"/> : <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center mb-1"><User className="w-3 h-3 text-white"/></div>
+            <div key={m.id} className={`flex gap-2 items-end w-full ${isMe?'justify-start':'justify-end'}`}>
+              {/* صورتي - للرسائل المرسلة (على الشمال زي اسكرينك) */}
+              {isMe && (
+                myData?.avatar? <img src={myData.avatar} className="w-8 h-8 rounded-full object-cover shrink-0"/> : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0"><User className="w-4 h-4 text-white"/></div>
               )}
 
-              <div className="flex flex-col max-w-[72%]">
+              <div className={`flex flex-col ${isMe?'items-start':'items-end'} max-w-[75%]`}>
                 <div
                   onClick={()=> setActiveReactId(activeReactId===m.id? null : m.id)}
-                  className={`relative px-4 py-2.5 rounded-[20px] text-[14.5px] leading-6 shadow-sm cursor-pointer active:scale-[0.98] transition
-                  ${isMe?'bg-[#00E5FF] text-black rounded-br-[6px]':'bg-[#1E2D32] text-white rounded-bl-[6px]'}`}
+                  className={`relative px-4 py-3 rounded-[18px] text-[15px] leading-6 shadow-sm cursor-pointer select-none
+                  ${isMe?'bg-[#00E5FF] text-black rounded-bl-[6px]':'bg-[#1E2D32] text-white rounded-br-[6px]'}`}
                 >
-                  {m.text}
+                  <div className="whitespace-pre-wrap break-words">{m.text}</div>
+
+                  {/* ريأكشن ثابت */}
                   {m.reaction && (
-                    <span className="absolute -bottom-3 -left-2 bg-[#0B1418] border border-white/10 rounded-full w-6 h-6 flex items-center justify-center text-[13px] shadow-md">{m.reaction}</span>
+                    <span className="absolute -bottom-3 left-3 bg-[#0B1418] border border-white/10 rounded-full w-7 h-7 flex items-center justify-center text-[14px] shadow-lg">{m.reaction}</span>
                   )}
-                  <span className={`flex items-center gap-1 mt-1 justify-end text-[10px] ${isMe?'text-black/60':'text-white/40'}`}>
-                    {m.created_at?.seconds? new Date(m.created_at.seconds*1000).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : ''}
-                    {isMe && <span className="mr-1">{m.read? <CheckCheck className="w-[14px] h-[14px] text-[#0057FF]" /> : <CheckCheck className="w-[14px] h-[14px] text-black/40" />}</span>}
-                  </span>
+
+                  {/* وقت + صحين */}
+                  <div className={`flex items-center gap-1 mt-1.5 ${isMe?'justify-start':'justify-end'}`}>
+                    <span className={`text-[11px] ${isMe?'text-black/50':'text-white/40'}`}>
+                      {m.created_at?.seconds? new Date(m.created_at.seconds*1000).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : 'الآن'}
+                    </span>
+                    {isMe && (
+                      <span className="mr-1">
+                        {m.read? <CheckCheck className="w-[16px] h-[16px] text-[#0064ff]" /> : <CheckCheck className="w-[16px] h-[16px] text-black/30" />}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {activeReactId===m.id && (
-                  <div className={`flex gap-1 mt-2 bg-[#1E2D32] rounded-full px-2.5 py-1.5 border border-white/15 shadow-2xl w-fit ${isMe?'self-end':''}`}>
-                    {["❤️","😂","😍","👍","🔥","😭"].map(e=>(
-                      <button key={e} onClick={()=>addReaction(m.id,e)} className="text-[19px] w-9 h-9 rounded-full hover:bg-white/10 active:scale-90 transition">{e}</button>
+                  <div className="flex gap-1 mt-2 bg-[#1E2D32] rounded-full px-2 py-1 border border-white/10 shadow-2xl animate-in zoom-in-95">
+                    {["❤️","😂","😍","👍","🔥","😭","👏"].map(e=>(
+                      <button key={e} onClick={()=>addReaction(m.id,e)} className="w-9 h-9 rounded-full hover:bg-white/10 active:scale-90 transition text-[20px]">{e}</button>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* صورتي على اليمين */}
-              {isMe && (
-                myData?.avatar? <img src={myData.avatar} className="w-7 h-7 rounded-full object-cover mb-1"/> : <div className="w-7 h-7 rounded-full bg-[#00E5FF]/20 flex items-center justify-center mb-1"><User className="w-3 h-3 text-black"/></div>
+              {/* صورة الصديق - للرسائل المستقبلة (على اليمين) */}
+              {!isMe && (
+                friendData?.avatar? <img src={friendData.avatar} className="w-8 h-8 rounded-full object-cover shrink-0"/> : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0"><User className="w-4 h-4 text-white"/></div>
               )}
             </div>
           )
         })}
-        <div ref={bottomRef}/>
+        <div ref={bottomRef} className="h-2"/>
       </div>
 
+      {/* Emoji Picker */}
       {showEmoji && (
-        <div className="bg-[#122025] border-t border-white/10 p-3 max-w-[600px] w-full mx-auto">
-          <div className="grid grid-cols-7 gap-2">
+        <div className="bg-[#122025] border-t border-white/10 p-3 max-w-[650px] w-full mx-auto">
+          <div className="grid grid-cols-8 gap-1">
             {EMOJIS.map(e=>(
-              <button key={e} onClick={()=> setText(prev=> prev+e)} className="text-[22px] hover:bg-white/10 w-10 h-10 rounded-xl transition">{e}</button>
+              <button key={e} onClick={()=> setText(p=> p+e)} className="text-[22px] hover:bg-white/10 w-10 h-10 rounded-xl transition">{e}</button>
             ))}
           </div>
         </div>
       )}
 
-      <div className="p-2.5 bg-[#122025] border-t border-white/10">
-        <div className="max-w-[600px] mx-auto flex gap-2 items-center">
-          <div className="flex-1 flex items-center bg-[#0B1418] border border-white/10 rounded-full px-2">
-            <button onClick={()=>setShowEmoji(v=>!v)} className="w-9 h-9 rounded-full flex items-center justify-center"><Smile className="w-5 h-5 text-white/70"/></button>
-            <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=> e.key==='Enter' && handleSend()} placeholder="اكتب رسالة..." className="flex-1 bg-transparent px-2 py-3 text-[14px] text-white outline-none"/>
+      {/* Input - نفس شكل اسكرينك */}
+      <div className="p-3 bg-[#0f1a1e] border-t border-white/10 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-[650px] mx-auto flex gap-2.5 items-center">
+          <button onClick={handleSend} disabled={!text.trim()} className="w-[44px] h-[44px] rounded-full bg-[#00E5FF] flex items-center justify-center shrink-0 disabled:opacity-50 shadow-[0_0_15px_rgba(0,229,255,0.3)] active:scale-95 transition">
+            <Send className="w-5 h-5 text-black rotate-[-30deg] translate-x-[-1px]"/>
+          </button>
+
+          <div className="flex-1 flex items-center bg-[#1E2D32] border border-white/10 rounded-full px-4 h-[44px]">
+            <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=> e.key==='Enter' && handleSend()} placeholder="اكتب رسالة..." className="flex-1 bg-transparent text-[14.5px] text-white outline-none placeholder:text-white/40"/>
+            <button onClick={()=>setShowEmoji(v=>!v)} className="w-8 h-8 rounded-full flex items-center justify-center mr-1"><Smile className="w-[22px] h-[22px] text-white/50"/></button>
           </div>
-          <button onClick={handleSend} className="w-11 h-11 rounded-full bg-[#00E5FF] flex items-center justify-center shadow-[0_0_15px_rgba(0,229,255,0.3)]"><Send className="w-5 h-5 text-black -rotate-12"/></button>
         </div>
       </div>
     </div>
