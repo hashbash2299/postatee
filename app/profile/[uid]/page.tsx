@@ -98,19 +98,28 @@ export default function ProfileWall() {
     await deleteDoc(doc(db,'friends', [myUid, targetUid].sort().join('_')));
     setFriendStatus('none');
   };
+
   const handleMessageClick = async()=>{
     if(!myUid ||!targetUid) return;
     const chatId = [myUid, targetUid].sort().join('_');
     if(friendStatus==='friends' || chatExists){
       const chatSnap = await getDoc(doc(db,'chats',chatId));
       if(!chatSnap.exists()){
-        await setDoc(doc(db,'chats',chatId),{ members:[myUid, targetUid], membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } }, created_at: serverTimestamp(), updated_at: serverTimestamp(), lastMessage: "" });
+        await setDoc(doc(db,'chats',chatId),{
+          members:[myUid, targetUid],
+          membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } },
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp(),
+          lastMessage: ""
+        });
       }
-      router.push(`/messages?chatId=${chatId}`);
+      // ✅ التعديل الوحيد المهم هنا
+      router.push(`/messages/${chatId}`);
     } else {
       setShowMsgInput(true);
     }
   };
+
   const sendMessageRequest = async()=>{
     if(!firstMessage.trim() ||!myUid ||!targetUid) return;
     await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName, fromAvatar: currentUserData?.avatar, toName: user?.displayName, firstMessage, status: 'pending', created_at: serverTimestamp() });
@@ -139,7 +148,6 @@ export default function ProfileWall() {
         {user.cover? <img src={user.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
         {isMine && (<><button onClick={()=>coverInput.current?.click()} className="absolute bottom-4 left-4 bg-black/60 p-2.5 rounded-full border border-white/20"><Camera className="w-5 h-5 text-white"/></button><input ref={coverInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'cover')}/></>)}
 
-        {/* الصورة والاسم فقط - بدون ازرار */}
         <div className="absolute -bottom-12 right-6 flex items-end gap-4">
           <div className="relative">
             <div className="w-24 h-24 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden">
@@ -157,7 +165,6 @@ export default function ProfileWall() {
         </div>
       </div>
 
-      {/* الزرين - تحت الصورة مباشرة - ظاهرين في الجوال واللابتوب */}
       {!isMine && myUid && (
         <div className="max-w-[600px] mx-auto px-6 mt-[68px]">
           <div className="flex gap-2.5 flex-wrap">
