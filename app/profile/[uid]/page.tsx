@@ -50,6 +50,8 @@ export default function ProfileWall() {
         const mySnap = await getDoc(doc(db,'users',me.uid));
         if(mySnap.exists()) setCurrentUserData(mySnap.data());
         setIsMine(me.uid === targetUid);
+      } else {
+        setIsMine(false);
       }
       const postsRef = collection(db, 'posts');
       const q1 = await getDocs(query(postsRef, where('uid','==', targetUid)));
@@ -62,53 +64,31 @@ export default function ProfileWall() {
     return () => { unsubUser(); unsubAuth(); };
   }, [targetUid]);
 
-  // === اصلاح مشكلة الصداقة التلقائية ===
   useEffect(() => {
-    if(!myUid ||!targetUid || myUid === targetUid){
-      setFriendStatus('loading');
-      return;
-    }
+    if(!myUid ||!targetUid || myUid === targetUid) return;
     const friendDocId = [myUid, targetUid].sort().join('_');
 
-    // 1- هل انتم اصدقاء؟
     const unsubFriend = onSnapshot(doc(db, 'friends', friendDocId), (snap)=>{
       if(snap.exists()){
         setFriendStatus('friends');
-      } else {
-        // لو ما اصدقاء، افحص الطلبات بينكم فقط
-        setFriendStatus('none'); // افتراضي
       }
-    });
+    }, (err)=>{ console.log("friends error", err); setFriendStatus('none'); });
 
-    // 2- طلبات الصداقة بينكم فقط (مافي in)
     const qSent = query(collection(db,'friendRequests'), where('from','==',myUid), where('to','==',targetUid), where('status','==','pending'));
     const qReceived = query(collection(db,'friendRequests'), where('from','==',targetUid), where('to','==',myUid), where('status','==','pending'));
 
     const unsubSent = onSnapshot(qSent, (snap)=>{
-      if(!snap.empty){
-        setFriendStatus('pending_sent');
-        setRequestId(snap.docs[0].id);
-      } else {
-        // لا تغير لو كان pending_received
-        setFriendStatus(prev => prev === 'pending_received'? prev : prev === 'friends'? prev : 'none');
-      }
-    });
+      if(!snap.empty){ setFriendStatus('pending_sent'); setRequestId(snap.docs[0].id); }
+      else { setFriendStatus(prev => prev === 'pending_received' || prev === 'friends'? prev : 'none'); }
+    }, ()=> setFriendStatus('none'));
+
     const unsubReceived = onSnapshot(qReceived, (snap)=>{
-      if(!snap.empty){
-        setFriendStatus('pending_received');
-        setRequestId(snap.docs[0].id);
-      } else {
-        setFriendStatus(prev => prev === 'pending_sent'? prev : prev === 'friends'? prev : 'none');
-      }
-    });
+      if(!snap.empty){ setFriendStatus('pending_received'); setRequestId(snap.docs[0].id); }
+      else { setFriendStatus(prev => prev === 'pending_sent' || prev === 'friends'? prev : 'none'); }
+    }, ()=> setFriendStatus('none'));
 
-    // 3- عدد الاصدقاء
     const unsubCount = onSnapshot(query(collection(db,'friends'), where('users','array-contains', targetUid)), (snap)=>{ setFriendsCount(snap.size); });
-
-    // 4- هل في شات؟
     const unsubChat = onSnapshot(doc(db,'chats',friendDocId), (snap)=> setChatExists(snap.exists()));
-
-    // 5- طلب مراسلة
     const unsubMsgReq = onSnapshot(query(collection(db,'messageRequests'), where('from','==', myUid), where('to','==', targetUid), where('status','==','pending')), (snap)=>{
       setMsgRequestStatus(snap.empty? 'none' : 'pending');
     });
@@ -120,6 +100,7 @@ export default function ProfileWall() {
     if(!myUid ||!targetUid) return;
     setFriendStatus('loading');
     await addDoc(collection(db,'friendRequests'), { from: myUid, to: targetUid, status:'pending', created_at: serverTimestamp() });
+    await addDoc(collection(db,'notifications'), { toUid: targetUid, to: targetUid, fromUid: myUid, fromName: currentUserData?.displayName, fromPhoto: currentUserData?.avatar, type: 'friend_request', text: 'ارسل لك طلب صداقة', read: false, created_at: serverTimestamp(), createdAt: serverTimestamp() });
   };
   const handleAccept = async ()=>{
     if(!myUid ||!targetUid ||!requestId) return;
@@ -131,8 +112,7 @@ export default function ProfileWall() {
   const handleCancel = async ()=>{
     if(!requestId) return;
     await deleteDoc(doc(db,'friendRequests', requestId));
-    setFriendStatus('none');
-    setRequestId(null);
+    setFriendStatus('none'); setRequestId(null);
   };
   const handleUnfriend = async ()=>{
     if(!myUid ||!targetUid) return;
@@ -140,50 +120,30 @@ export default function ProfileWall() {
     await deleteDoc(doc(db,'friends', friendDocId));
     setFriendStatus('none');
   };
-
   const handleMessageClick = async()=>{
     if(!myUid ||!targetUid) return;
     const chatId = [myUid, targetUid].sort().join('_');
     if(friendStatus==='friends' || chatExists){
       const chatSnap = await getDoc(doc(db,'chats',chatId));
       if(!chatSnap.exists()){
-        await setDoc(doc(db,'chats',chatId),{
-          members:[myUid, targetUid],
-          membersInfo: {
-            [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar },
-            [targetUid]: { name: user?.displayName, avatar: user?.avatar }
-          },
-          created_at: serverTimestamp(), updated_at: serverTimestamp(), lastMessage: ""
-        });
+        await setDoc(doc(db,'chats',chatId),{ members:[myUid, targetUid], membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } }, created_at: serverTimestamp(), updated_at: serverTimestamp(), lastMessage: "" });
       }
       router.push(`/messages?chatId=${chatId}`);
     } else {
       setShowMsgInput(!showMsgInput);
     }
   };
-
   const sendMessageRequest = async()=>{
     if(!firstMessage.trim() ||!myUid ||!targetUid) return;
     setMsgRequestStatus('loading');
-    await addDoc(collection(db,'messageRequests'),{
-      from: myUid, to: targetUid, fromName: currentUserData?.displayName || "مستخدم", fromAvatar: currentUserData?.avatar || "",
-      toName: user?.displayName, firstMessage: firstMessage, status: 'pending', created_at: serverTimestamp()
-    });
-    await addDoc(collection(db,'notifications'),{
-      toUid: targetUid, to: targetUid, fromUid: myUid, fromName: currentUserData?.displayName, fromPhoto: currentUserData?.avatar,
-      type: 'message_request', text: `أرسل لك طلب مراسلة: ${firstMessage.slice(0,20)}`, read: false,
-      created_at: serverTimestamp(), createdAt: serverTimestamp()
-    });
+    await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName || "مستخدم", fromAvatar: currentUserData?.avatar || "", toName: user?.displayName, firstMessage: firstMessage, status: 'pending', created_at: serverTimestamp() });
+    await addDoc(collection(db,'notifications'),{ toUid: targetUid, to: targetUid, fromUid: myUid, fromName: currentUserData?.displayName, fromPhoto: currentUserData?.avatar, type: 'message_request', text: `أرسل لك طلب مراسلة: ${firstMessage.slice(0,20)}`, read: false, created_at: serverTimestamp(), createdAt: serverTimestamp() });
     setFirstMessage(""); setShowMsgInput(false); setMsgRequestStatus('pending');
   };
-
   const handleUpload = async (e:any, type:'avatar'|'cover') => {
     const file = e.target.files[0]; if(!file) return;
     const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const base64 = ev.target?.result as string;
-      await updateDoc(doc(db, 'users', targetUid), { [type]: base64 });
-    };
+    reader.onload = async (ev) => { const base64 = ev.target?.result as string; await updateDoc(doc(db, 'users', targetUid), { [type]: base64 }); };
     reader.readAsDataURL(file);
   };
 
@@ -214,13 +174,20 @@ export default function ProfileWall() {
             <p className="text-white/50 text-xs mt-1">@{user.username} • {friendsCount} صديق • {user.isOnline?'متصل الآن':'غير متصل'}</p>
           </div>
           {!isMine && myUid && (
-            <div className="pb-2 flex gap-2">
-              {friendStatus==='none' && <button onClick={handleSend} className="bg-gradient-to-r from-cyan-400 to-teal-400 text-black font-black text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><UserPlus className="w-4 h-4"/> إضافة</button>}
+            <div className="pb-2 flex gap-2 flex-wrap">
+              {(friendStatus==='none' || friendStatus==='loading') && <button onClick={handleSend} className="bg-gradient-to-r from-cyan-400 to-teal-400 text-black font-black text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><UserPlus className="w-4 h-4"/> إضافة</button>}
               {friendStatus==='pending_sent' && <button onClick={handleCancel} className="bg-white/10 border border-white/20 text-white font-bold text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><Clock className="w-4 h-4"/> تم الإرسال</button>}
               {friendStatus==='pending_received' && <div className="flex gap-2"><button onClick={handleAccept} className="bg-green-500 text-white font-black text-sm px-4 py-2 rounded-full flex items-center gap-1"><Check className="w-4 h-4"/> قبول</button><button onClick={handleCancel} className="bg-white/10 text-white px-3 py-2 rounded-full"><X className="w-4 h-4"/></button></div>}
               {friendStatus==='friends' && <button onClick={handleUnfriend} className="bg-white/[0.06] border border-white/10 text-white font-bold text-sm px-4 py-2 rounded-full flex items-center gap-1.5"><UserMinus className="w-4 h-4"/> صديق</button>}
-              {friendStatus==='loading' && <div className="bg-white/10 text-white/50 text-sm px-5 py-2 rounded-full">...</div>}
-              {friendStatus==='friends' || chatExists? (<button onClick={handleMessageClick} className="bg-[#00E5FF] text-black font-black text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><MessageCircle className="w-4 h-4"/> مراسلة</button>) : (<>{msgRequestStatus==='none' && <button onClick={handleMessageClick} className="bg-white/10 border border-white/20 text-white font-bold text-sm px-4 py-2 rounded-full flex items-center gap-1.5"><Send className="w-4 h-4"/> طلب مراسلة</button>}{msgRequestStatus==='pending' && <button className="bg-white/10 border border-white/10 text-white/50 font-bold text-sm px-4 py-2 rounded-full">تم ارسال الطلب</button>}{msgRequestStatus==='loading' && <div className="bg-white/10 text-white/50 text-sm px-4 py-2 rounded-full">...</div>}</>)}
+
+              {(friendStatus==='none' || friendStatus==='loading') && (
+                <>
+                  {msgRequestStatus==='none' && <button onClick={handleMessageClick} className="bg-white/10 border border-white/20 text-white font-bold text-sm px-4 py-2 rounded-full flex items-center gap-1.5"><Send className="w-4 h-4"/> طلب مراسلة</button>}
+                  {msgRequestStatus==='pending' && <span className="bg-white/10 border border-white/10 text-white/50 font-bold text-sm px-4 py-2 rounded-full">تم ارسال الطلب</span>}
+                  {msgRequestStatus==='loading' && <span className="bg-white/10 text-white/50 text-sm px-4 py-2 rounded-full">...</span>}
+                </>
+              )}
+              {(friendStatus==='friends' || chatExists) && <button onClick={handleMessageClick} className="bg-[#00E5FF] text-black font-black text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><MessageCircle className="w-4 h-4"/> مراسلة</button>}
             </div>
           )}
         </div>
