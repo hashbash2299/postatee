@@ -16,7 +16,6 @@ export default function MessagesClient() {
         return
       }
 
-      // 1- نجيب من chats (النظام الجديد بتاع البروفايل)
       const q1 = query(collection(db, "chats"), where("members", "array-contains", user.uid))
       const unsub1 = onSnapshot(q1, async (snap) => {
         const list = await Promise.all(snap.docs.map(async d => {
@@ -28,7 +27,7 @@ export default function MessagesClient() {
             if(uSnap.exists()) userData = uSnap.data()
           }
           return {
-            id: d.id,
+            id: d.id, // ده chatId = uid1_uid2
             otherId,
             userData,
             lastMessage: data.lastMessage || "",
@@ -37,14 +36,12 @@ export default function MessagesClient() {
           }
         }))
         setConversations(prev => {
-          // ادمج مع القديم
           const old = prev.filter(p=> p.source==='conversations')
           return [...list,...old].sort((a:any,b:any)=> (b.updatedAt?.seconds||0) - (a.updatedAt?.seconds||0))
         })
         setLoading(false)
       })
 
-      // 2- نجيب من conversations (النظام القديم)
       const q2 = query(collection(db, "conversations"), where("participants", "array-contains", user.uid))
       const unsub2 = onSnapshot(q2, (snap) => {
         const list = snap.docs.map(d => ({ id: d.id,...d.data(), source:'conversations' }))
@@ -71,7 +68,7 @@ export default function MessagesClient() {
           conversations.map((c) => (
             <Link
               key={c.id}
-              href={c.source==='chats'? `/chat/${c.otherId}` : `/messages/${c.id}`}
+              href={`/messages/${c.id}`}
               className="flex items-center gap-3 p-4 mb-2 bg-white/[0.04] border border-white/10 rounded-2xl hover:bg-white/[0.06] transition"
             >
               <img src={c.userData?.avatar || `https://i.pravatar.cc/100?u=${c.otherId || c.id}`} className="w-12 h-12 rounded-full object-cover"/>
