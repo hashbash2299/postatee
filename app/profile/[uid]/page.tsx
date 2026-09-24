@@ -1,9 +1,9 @@
 "use client"
 import { useState, useEffect, useRef } from "react";
 import { db, auth } from "../../lib/firebase";
-import { doc, collection, getDocs, query, where, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { doc, collection, getDocs, query, where, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, FileText, Images, LayoutGrid } from "lucide-react";
+import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, FileText, Images, LayoutGrid, MessageCircle, Send } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
 const getNameColor = (role:string) => {
@@ -25,6 +25,7 @@ const RoleBadge = ({ role }: { role: string }) => {
 export default function ProfileWall() {
   const { uid } = useParams();
   const [user, setUser] = useState<any>(null);
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [isMine, setIsMine] = useState(false);
   const [myUid, setMyUid] = useState<string|null>(null);
@@ -32,6 +33,12 @@ export default function ProfileWall() {
   const [requestId, setRequestId] = useState<string|null>(null);
   const [friendsCount, setFriendsCount] = useState(0);
   const [tab, setTab] = useState<'all'|'media'|'text'>('all');
+
+  // جديد للدردشة
+  const [chatExists, setChatExists] = useState(false);
+  const [msgRequestStatus, setMsgRequestStatus] = useState<'none'|'pending'|'loading'>('none');
+  const [showMsgInput, setShowMsgInput] = useState(false);
+  const [firstMessage, setFirstMessage] = useState("");
 
   const avatarInput = useRef<HTMLInputElement>(null);
   const coverInput = useRef<HTMLInputElement>(null);
@@ -46,6 +53,8 @@ export default function ProfileWall() {
     const unsubAuth = onAuthStateChanged(auth, async (me) => {
       if (me) {
         setMyUid(me.uid);
+        const mySnap = await getDoc(doc(db,'users',me.uid));
+        if(mySnap.exists()) setCurrentUserData(mySnap.data());
         if (me?.uid === uid) setIsMine(true);
         else setIsMine(false);
       }
@@ -78,11 +87,8 @@ export default function ProfileWall() {
           const data = d.data();
           if((data.from===myUid && data.to===targetUid) || (data.from===targetUid && data.to===myUid)){
             if(data.status==='pending'){
-              if(data.from===myUid){
-                setFriendStatus('pending_sent');
-              } else {
-                setFriendStatus('pending_received');
-              }
+              if(data.from===myUid) setFriendStatus('pending_sent');
+              else setFriendStatus('pending_received');
               setRequestId(d.id);
               found=true;
             }
@@ -93,46 +99,104 @@ export default function ProfileWall() {
       return ()=>unsubReq();
     });
 
+    // شيك هل في شات موجود
+    const unsubChat = onSnapshot(doc(db,'chats',friendDocId), (snap)=>{
+      setChatExists(snap.exists());
+    });
+
+    // شيك طلبات مراسلة
+    const unsubMsgReq = onSnapshot(query(collection(db,'messageRequests'), where('from','==', myUid), where('to','==', targetUid), where('status','==','pending')), (snap)=>{
+      if(!snap.empty) setMsgRequestStatus('pending');
+      else setMsgRequestStatus('none');
+    });
+
     const unsubCount = onSnapshot(query(collection(db,'friends'), where('users','array-contains', targetUid)), (snap)=>{
       setFriendsCount(snap.size);
     });
 
-    return ()=>{ unsubFriend(); unsubCount(); };
+    return ()=>{ unsubFriend(); unsubCount(); unsubChat(); unsubMsgReq(); };
   }, [myUid, uid]);
 
   const handleSend = async ()=>{
     if(!myUid ||!uid) return;
     setFriendStatus('loading');
-    await addDoc(collection(db,'friendRequests'), {
-      from: myUid,
-      to: uid,
-      status:'pending',
-      created_at: serverTimestamp()
-    });
+    await addDoc(collection(db,'friendRequests'), { from: myUid, to: uid, status:'pending', created_at: serverTimestamp() });
   };
-
   const handleAccept = async ()=>{
     if(!myUid ||!uid ||!requestId) return;
     const friendDocId = [myUid, uid as string].sort().join('_');
-    await setDoc(doc(db,'friends', friendDocId), {
-      users:[myUid, uid],
-      created_at: serverTimestamp()
-    });
+    await setDoc(doc(db,'friends', friendDocId), { users:[myUid, uid], created_at: serverTimestamp() });
     await deleteDoc(doc(db,'friendRequests', requestId));
     setFriendStatus('friends');
   };
-
   const handleCancel = async ()=>{
     if(!requestId) return;
     await deleteDoc(doc(db,'friendRequests', requestId));
     setFriendStatus('none');
   };
-
   const handleUnfriend = async ()=>{
     if(!myUid ||!uid) return;
     const friendDocId = [myUid, uid as string].sort().join('_');
     await deleteDoc(doc(db,'friends', friendDocId));
     setFriendStatus('none');
+  };
+
+  // ---- جديد: نظام المراسلة ----
+  const handleMessageClick = async()=>{
+    if(!myUid ||!uid) return;
+    const targetUid = uid as string;
+    const chatId = [myUid, targetUid].sort().join('_');
+
+    if(friendStatus==='friends' || chatExists){
+      // صديق -> افتح دردشة مباشرة
+      const chatSnap = await getDoc(doc(db,'chats',chatId));
+      if(!chatSnap.exists()){
+        await setDoc(doc(db,'chats',chatId),{
+          members:[myUid, targetUid],
+          membersInfo: {
+            [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar },
+            [targetUid]: { name: user?.displayName, avatar: user?.avatar }
+          },
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp(),
+          lastMessage: ""
+        });
+      }
+      router.push(`/messages?chatId=${chatId}`);
+    } else {
+      // ما صديق -> اظهر بوكس كتابة طلب مراسلة
+      setShowMsgInput(!showMsgInput);
+    }
+  };
+
+  const sendMessageRequest = async()=>{
+    if(!firstMessage.trim() ||!myUid ||!uid) return;
+    setMsgRequestStatus('loading');
+    await addDoc(collection(db,'messageRequests'),{
+      from: myUid,
+      to: uid,
+      fromName: currentUserData?.displayName || "مستخدم",
+      fromAvatar: currentUserData?.avatar || "",
+      toName: user?.displayName,
+      firstMessage: firstMessage,
+      status: 'pending',
+      created_at: serverTimestamp()
+    });
+    // اشعار للطرف التاني
+    await addDoc(collection(db,'notifications'),{
+      toUid: uid, to: uid,
+      fromUid: myUid,
+      fromName: currentUserData?.displayName,
+      fromPhoto: currentUserData?.avatar,
+      type: 'message_request',
+      text: `أرسل لك طلب مراسلة: ${firstMessage.slice(0,20)}`,
+      read: false,
+      created_at: serverTimestamp(),
+      createdAt: serverTimestamp()
+    });
+    setFirstMessage("");
+    setShowMsgInput(false);
+    setMsgRequestStatus('pending');
   };
 
   const handleUpload = async (e:any, type:'avatar'|'cover') => {
@@ -159,9 +223,7 @@ export default function ProfileWall() {
     <div className="min-h-screen bg-[#050a0a]" dir="rtl">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap'); *{font-family:'Tajawal',sans-serif!important;}`}</style>
       <header className="sticky top-0 z-50 h-[56px] bg-[#050a0a]/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-4">
-        <button onClick={()=>router.push('/')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
-          <ArrowLeft className="w-5 h-5 text-white"/>
-        </button>
+        <button onClick={()=>router.push('/')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><ArrowLeft className="w-5 h-5 text-white"/></button>
         <span className={`font-black ${getNameColor(user.role)}`}>{user.displayName}</span>
         <div className="w-9"/>
       </header>
@@ -171,9 +233,7 @@ export default function ProfileWall() {
         <div className="absolute inset-0 bg-black/20"/>
         {isMine && (
           <>
-            <button onClick={()=>coverInput.current?.click()} className="absolute bottom-4 left-4 bg-black/60 backdrop-blur p-2.5 rounded-full border border-white/20">
-              <Camera className="w-5 h-5 text-white"/>
-            </button>
+            <button onClick={()=>coverInput.current?.click()} className="absolute bottom-4 left-4 bg-black/60 backdrop-blur p-2.5 rounded-full border border-white/20"><Camera className="w-5 h-5 text-white"/></button>
             <input ref={coverInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'cover')}/>
           </>
         )}
@@ -186,9 +246,7 @@ export default function ProfileWall() {
             <span className={`absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full border-2 border-[#050a0a] ${user.isOnline?'bg-green-400':'bg-gray-500'}`}></span>
             {isMine && (
               <>
-                <button onClick={()=>avatarInput.current?.click()} className="absolute -bottom-1 -left-1 bg-white p-1.5 rounded-full shadow-lg">
-                  <Camera className="w-4 h-4 text-black"/>
-                </button>
+                <button onClick={()=>avatarInput.current?.click()} className="absolute -bottom-1 -left-1 bg-white p-1.5 rounded-full shadow-lg"><Camera className="w-4 h-4 text-black"/></button>
                 <input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'avatar')}/>
               </>
             )}
@@ -202,41 +260,56 @@ export default function ProfileWall() {
           </div>
 
           {!isMine && myUid && (
-            <div className="pb-2">
+            <div className="pb-2 flex gap-2">
               {friendStatus==='none' && <button onClick={handleSend} className="bg-gradient-to-r from-cyan-400 to-teal-400 text-black font-black text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><UserPlus className="w-4 h-4"/> إضافة</button>}
               {friendStatus==='pending_sent' && <button onClick={handleCancel} className="bg-white/10 border border-white/20 text-white font-bold text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><Clock className="w-4 h-4"/> تم الإرسال</button>}
               {friendStatus==='pending_received' && <div className="flex gap-2"><button onClick={handleAccept} className="bg-green-500 text-white font-black text-sm px-4 py-2 rounded-full flex items-center gap-1"><Check className="w-4 h-4"/> قبول</button><button onClick={handleCancel} className="bg-white/10 text-white px-3 py-2 rounded-full"><X className="w-4 h-4"/></button></div>}
-              {friendStatus==='friends' && <button onClick={handleUnfriend} className="bg-white/[0.06] border border-white/10 text-white font-bold text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><UserMinus className="w-4 h-4"/> صديق ✓</button>}
+              {friendStatus==='friends' && <button onClick={handleUnfriend} className="bg-white/[0.06] border border-white/10 text-white font-bold text-sm px-4 py-2 rounded-full flex items-center gap-1.5"><UserMinus className="w-4 h-4"/> صديق</button>}
               {friendStatus==='loading' && <div className="bg-white/10 text-white/50 text-sm px-5 py-2 rounded-full">...</div>}
+
+              {/* زر المراسلة */}
+              {friendStatus==='friends' || chatExists? (
+                <button onClick={handleMessageClick} className="bg-[#00E5FF] text-black font-black text-sm px-5 py-2 rounded-full flex items-center gap-1.5"><MessageCircle className="w-4 h-4"/> مراسلة</button>
+              ) : (
+                <>
+                  {msgRequestStatus==='none' && <button onClick={handleMessageClick} className="bg-white/10 border border-white/20 text-white font-bold text-sm px-4 py-2 rounded-full flex items-center gap-1.5"><Send className="w-4 h-4"/> طلب مراسلة</button>}
+                  {msgRequestStatus==='pending' && <button className="bg-white/10 border border-white/10 text-white/50 font-bold text-sm px-4 py-2 rounded-full">تم ارسال الطلب</button>}
+                  {msgRequestStatus==='loading' && <div className="bg-white/10 text-white/50 text-sm px-4 py-2 rounded-full">...</div>}
+                </>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      <div className="max-w-[600px] mx-auto mt-20 px-3 pb-20">
+      {/* بوكس طلب المراسلة */}
+      {showMsgInput && (
+        <div className="max-w-[600px] mx-auto mt-20 px-3">
+          <div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2">
+            <input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${user.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none"/>
+            <button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button>
+            <button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4"/></button>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-[600px] mx-auto mt-4 px-3 pb-20">
         <div className="flex gap-6 border-b border-white/10 pb-2 text-sm">
           <span className="font-bold text-white border-b-2 border-cyan-400 pb-2">البروفايل</span>
           <span className="text-white/40">{posts.length} منشور • {friendsCount} صديق</span>
           {user.role && <span className="mr-auto"><RoleBadge role={user.role}/></span>}
         </div>
 
-        {/* التابات الجديدة */}
         <div className="flex bg-white/[0.05] rounded-2xl p-1.5 gap-1.5 mt-4 border border-white/10 sticky top-[60px] z-40 backdrop-blur-xl">
-          <button onClick={()=>setTab('all')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] flex items-center justify-center gap-1.5 transition-all ${tab==='all'?'bg-[#00E5FF] text-black shadow-lg':'text-white/50 hover:text-white'}`}><LayoutGrid className="w-4 h-4"/> الكل ({posts.length})</button>
-          <button onClick={()=>setTab('media')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] flex items-center justify-center gap-1.5 transition-all ${tab==='media'?'bg-[#00E5FF] text-black shadow-lg':'text-white/50 hover:text-white'}`}><Images className="w-4 h-4"/> وسائط ({posts.filter((p:any)=>p.image||p.video||p.media).length})</button>
-          <button onClick={()=>setTab('text')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] flex items-center justify-center gap-1.5 transition-all ${tab==='text'?'bg-[#00E5FF] text-black shadow-lg':'text-white/50 hover:text-white'}`}><FileText className="w-4 h-4"/> كتابة ({posts.filter((p:any)=>!p.image&&!p.video&&!p.media).length})</button>
+          <button onClick={()=>setTab('all')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] flex items-center justify-center gap-1.5 ${tab==='all'?'bg-[#00E5FF] text-black':'text-white/50'}`}><LayoutGrid className="w-4 h-4"/> الكل ({posts.length})</button>
+          <button onClick={()=>setTab('media')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] flex items-center justify-center gap-1.5 ${tab==='media'?'bg-[#00E5FF] text-black':'text-white/50'}`}><Images className="w-4 h-4"/> وسائط</button>
+          <button onClick={()=>setTab('text')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] flex items-center justify-center gap-1.5 ${tab==='text'?'bg-[#00E5FF] text-black':'text-white/50'}`}><FileText className="w-4 h-4"/> كتابة</button>
         </div>
 
         <div className="space-y-3 mt-4">
-          {filteredPosts.length===0 && <div className="text-center text-white/30 mt-10 border border-dashed border-white/10 rounded-2xl py-10">ما في منشورات في قسم {tab==='media'?'الوسائط':tab==='text'?'الكتابات':'الكل'} لسه</div>}
-
           {filteredPosts.map((p:any)=>
             <div key={p.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
-              <div className="flex gap-2 items-center mb-2">
-                <img src={user.avatar} className="w-8 h-8 rounded-full"/>
-                <span className={`text-sm font-bold ${getNameColor(user.role)}`}>{user.displayName}</span>
-                <RoleBadge role={user.role}/>
-              </div>
+              <div className="flex gap-2 items-center mb-2"><img src={user.avatar} className="w-8 h-8 rounded-full"/><span className={`text-sm font-bold ${getNameColor(user.role)}`}>{user.displayName}</span><RoleBadge role={user.role}/></div>
               <p className="text-[15px] whitespace-pre-wrap text-white/90">{p.content}</p>
               {p.image && <img src={p.image} className="mt-3 rounded-xl w-full"/>}
               {p.video && <video src={p.video} controls className="mt-3 rounded-xl w-full"/>}
