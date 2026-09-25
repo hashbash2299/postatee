@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { db, auth } from "../../lib/firebase";
 import { doc, collection, getDocs, query, where, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, FileText, Images, LayoutGrid, MessageCircle, Send } from "lucide-react";
+import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, FileText, Images, LayoutGrid, MessageCircle, Send, Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
 const getNameColor = (role:string) => {
@@ -37,6 +37,7 @@ export default function ProfileWall() {
   const [msgRequestStatus, setMsgRequestStatus] = useState<'none'|'pending'>('none');
   const [showMsgInput, setShowMsgInput] = useState(false);
   const [firstMessage, setFirstMessage] = useState("");
+  const [uploading, setUploading] = useState<'avatar'|'cover'|null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
   const coverInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -113,7 +114,6 @@ export default function ProfileWall() {
           lastMessage: ""
         });
       }
-      // ✅ التعديل الوحيد المهم هنا
       router.push(`/messages/${chatId}`);
     } else {
       setShowMsgInput(true);
@@ -125,11 +125,53 @@ export default function ProfileWall() {
     await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName, fromAvatar: currentUserData?.avatar, toName: user?.displayName, firstMessage, status: 'pending', created_at: serverTimestamp() });
     setFirstMessage(""); setShowMsgInput(false); setMsgRequestStatus('pending');
   };
+
+  // ✅ الدالة المعدلة - بدون Storage وبتضغط الصورة
   const handleUpload = async (e:any, type:'avatar'|'cover') => {
-    const file = e.target.files[0]; if(!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => { await updateDoc(doc(db, 'users', targetUid), { [type]: ev.target?.result as string }); };
-    reader.readAsDataURL(file);
+    const file = e.target.files[0];
+    if(!file) return;
+    try {
+      setUploading(type);
+      const compressedBase64 = await new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          const maxW = type === 'cover'? 900 : 300;
+          if (w > maxW) {
+            h = (maxW / w) * h;
+            w = maxW;
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d')!;
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+          URL.revokeObjectURL(img.src);
+          resolve(dataUrl);
+        };
+        img.onerror = () => reject(new Error('فشل تحميل الصورة'));
+      });
+
+      const sizeKB = Math.round(compressedBase64.length / 1024);
+      console.log(`حجم ${type} بعد الضغط: ${sizeKB}KB`);
+
+      if(compressedBase64.length > 900000){
+        alert("الصورة كبيرة شديد حتى بعد الضغط، جرب صورة تانية اصغر");
+        return;
+      }
+
+      await updateDoc(doc(db, 'users', targetUid), { [type]: compressedBase64 });
+      console.log("✅ تم الحفظ بنجاح");
+
+    } catch(err:any){
+      console.error("❌ فشل الرفع:", err);
+      alert("فشل رفع الصورة: " + err.message);
+    } finally {
+      setUploading(null);
+      if(e.target) e.target.value = "";
+    }
   };
 
   if (!user) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري تحميل الحائط...</div>;
@@ -146,14 +188,16 @@ export default function ProfileWall() {
 
       <div className="relative h-[200px] w-full bg-white/5">
         {user.cover? <img src={user.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
-        {isMine && (<><button onClick={()=>coverInput.current?.click()} className="absolute bottom-4 left-4 bg-black/60 p-2.5 rounded-full border border-white/20"><Camera className="w-5 h-5 text-white"/></button><input ref={coverInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'cover')}/></>)}
+        {uploading==='cover' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="w-8 h-8 text-white animate-spin"/></div>}
+        {isMine && (<><button onClick={()=>coverInput.current?.click()} disabled={!!uploading} className="absolute bottom-4 left-4 bg-black/60 p-2.5 rounded-full border border-white/20">{uploading==='cover'? <Loader2 className="w-5 h-5 text-white animate-spin"/> : <Camera className="w-5 h-5 text-white"/>}</button><input ref={coverInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'cover')}/></>)}
 
         <div className="absolute -bottom-12 right-6 flex items-end gap-4">
           <div className="relative">
             <div className="w-24 h-24 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden">
               {user.avatar? <img src={user.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}
+              {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
             </div>
-            {isMine && (<><button onClick={()=>avatarInput.current?.click()} className="absolute -bottom-1 -left-1 bg-white p-1.5 rounded-full"><Camera className="w-4 h-4 text-black"/></button><input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'avatar')}/></>)}
+            {isMine && (<><button onClick={()=>avatarInput.current?.click()} disabled={!!uploading} className="absolute -bottom-1 -left-1 bg-white p-1.5 rounded-full"><Camera className="w-4 h-4 text-black"/></button><input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'avatar')}/></>)}
           </div>
           <div className="pb-2">
             <div className="flex items-center gap-2">
