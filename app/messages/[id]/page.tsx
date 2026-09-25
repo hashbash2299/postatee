@@ -1,12 +1,12 @@
 "use client"
 import { useEffect, useState, useRef } from "react"
 import { db, auth } from "@/lib/firebase"
-import { collection, query, orderBy, where, onSnapshot, addDoc, serverTimestamp, doc, getDoc, setDoc, updateDoc, writeBatch } from "firebase/firestore"
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, setDoc, updateDoc, writeBatch } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Send, User, Smile, CheckCheck, Crown, Star, ExternalLink } from "lucide-react"
 
-const EMOJIS = ["❤️","😂","😍","😭","😅","👍","🙏","🔥","💔","😎","🥺","🤣","😁","😘"]
+const EMOJIS = ["❤️","😂","😍","😭","😅","👍","🙏","🔥","💔","😎","🥺","🤣","😁","😘","👌","👏"]
 
 export default function MessageRoom(){
   const params = useParams()
@@ -25,10 +25,11 @@ export default function MessageRoom(){
   const router=useRouter()
 
   useEffect(()=>{
-    // جلب الاعلانات من لوحة التحكم
-    const qAds = query(collection(db,'golden_ads'), where('active','==',true), orderBy('order','asc'))
-    const unsubAds = onSnapshot(qAds, snap=>{
-      setAds(snap.docs.map(d=>({id:d.id,...d.data()})))
+    // === تم التعديل هنا فقط - بدون ما يحتاج Index ===
+    const qAds = collection(db,'golden_ads')
+    const unsubAds = onSnapshot(qAds as any, snap=>{
+      const all = snap.docs.map(d=>({id:d.id,...d.data()})) as any[]
+      setAds(all.filter((a:any)=> a.active!== false))
     })
 
     const unsub = onAuthStateChanged(auth, async (u)=>{
@@ -93,7 +94,7 @@ export default function MessageRoom(){
           <div className="flex items-center gap-2"><Crown className="w-5 h-5 text-yellow-400"/><h3 className="font-bold text-white text-[15px]">الشركاء الذهبيون</h3><span className="mr-auto bg-yellow-400/20 text-yellow-400 text-[10px] px-2 py-1 rounded-full font-bold">ممول</span></div>
         </div>
         <div className="p-3 space-y-4">
-          {ads.length===0 && <p className="text-white/20 text-[12px] text-center py-10">لا توجد اعلانات حاليا</p>}
+          {ads.length===0 && <p className="text-white/20 text-[12px] text-center py-10">لا توجد اعلانات حاليا - اضف من لوحة الادمن</p>}
           {ads.map((ad,i)=>(
             <a key={ad.id} href={ad.link||'#'} target="_blank" className={`relative rounded-[18px] overflow-hidden group cursor-pointer border block ${i===0?'h-[280px] border-yellow-400/20':'h-[160px] border-white/10'}`}>
               <img src={ad.img} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
@@ -108,11 +109,6 @@ export default function MessageRoom(){
               <div className="absolute top-0 -left-full h-full w-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
             </a>
           ))}
-          <div className="bg-[#122025] border border-white/10 rounded-[16px] p-4">
-            <h5 className="text-white font-bold text-[14px] mb-2">عايز اعلانك هنا؟</h5>
-            <p className="text-white/50 text-[12px] leading-5">مساحة مخصصة تظهر لأكثر من 50 الف مستخدم</p>
-            <button className="mt-3 w-full bg-[#00E5FF] text-black rounded-full py-2.5 text-[13px] font-bold">احجز الآن</button>
-          </div>
         </div>
       </div>
 
