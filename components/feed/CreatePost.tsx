@@ -2,8 +2,9 @@
 import { useState, useRef } from "react";
 import { db, auth } from "../../app/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { Image as ImageIcon, Video as VideoIcon, Send, X, Smile } from "lucide-react";
+import { Image as ImageIcon, Video as VideoIcon, Send, X, Smile, Loader2 } from "lucide-react";
 import { feelingsList } from "./feelings";
+import { processImage } from "../../lib/imageProcessor"; // ✅ المصنع
 
 export default function CreatePost({ currentUser }: { currentUser:any }){
   const [text, setText] = useState("");
@@ -11,28 +12,54 @@ export default function CreatePost({ currentUser }: { currentUser:any }){
   const [mediaType, setMediaType] = useState<"image"|"video"|null>(null);
   const [feeling, setFeeling] = useState<any>(null);
   const [showFeelings, setShowFeelings] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = (e:any)=>{
-    const file = e.target.files[0]; if(!file) return;
-    if(file.size > 12*1024*1024) return alert("الملف كبير أقل من 12MB");
-    const isVideo = file.type.startsWith("video/");
-    const reader = new FileReader();
-    reader.onload = (ev)=>{ setMedia(ev.target?.result as string); setMediaType(isVideo?"video":"image"); };
-    reader.readAsDataURL(file);
+  const handleFile = async (e:any)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+
+    // فيديو: نحتفظ بالطريقة القديمة لكن بتحذير
+    if(file.type.startsWith("video/")){
+      if(file.size > 8*1024*1024) return alert("الفيديو كبير، أقل من 8MB");
+      const reader = new FileReader();
+      reader.onload = (ev)=>{ setMedia(ev.target?.result as string); setMediaType("video"); };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // صورة: تمر بالمصنع
+    try{
+      setUploading(true);
+      const compressed = await processImage(file, 'post'); // ✅ هنا الضغط
+      setMedia(compressed);
+      setMediaType("image");
+    }catch(err:any){
+      alert(err.message);
+    }finally{
+      setUploading(false);
+      if(e.target) e.target.value = "";
+    }
   };
 
   const handlePost = async () => {
     if (!text.trim() &&!media) return;
-    await addDoc(collection(db, "posts"), {
-      content:text, image: mediaType==="image"?media:null, video: mediaType==="video"?media:null,
-      feeling, created_at: serverTimestamp(),
-      uid: auth.currentUser?.uid, authorId: auth.currentUser?.uid,
-      authorName: currentUser?.displayName, authorUsername: currentUser?.username,
-      authorAvatar: currentUser?.avatar || "", authorRole: currentUser?.role || "",
-      likes: [], likesCount: 0, commentsCount: 0
-    });
-    setText(""); setMedia(null); setMediaType(null); setFeeling(null); setShowFeelings(false);
+    if(uploading) return;
+    try{
+      await addDoc(collection(db, "posts"), {
+        content:text,
+        image: mediaType==="image"?media:null,
+        video: mediaType==="video"?media:null,
+        feeling, created_at: serverTimestamp(),
+        uid: auth.currentUser?.uid, authorId: auth.currentUser?.uid,
+        authorName: currentUser?.displayName, authorUsername: currentUser?.username,
+        authorAvatar: currentUser?.avatar || "", authorRole: currentUser?.role || "",
+        likes: [], likesCount: 0, commentsCount: 0
+      });
+      setText(""); setMedia(null); setMediaType(null); setFeeling(null); setShowFeelings(false);
+    }catch(err:any){
+      alert("فشل النشر: الصورة لسه كبيرة، جرب صورة تانية");
+    }
   };
 
   return (
@@ -45,19 +72,23 @@ export default function CreatePost({ currentUser }: { currentUser:any }){
           {media && (
             <div className="relative mt-3 rounded-xl overflow-hidden border border-white/10">
               {mediaType==="image"? <img src={media} className="w-full max-h-[400px] object-cover"/> : <video src={media} controls className="w-full max-h-[400px] bg-black"/>}
-              <button onClick={()=>{setMedia(null); setMediaType(null);}} className="absolute top-2 left-2 bg-black/70 p-1.5 rounded-full"><X className="w-4 h-4"/></button>
+              <button onClick={()=>{setMedia(null); setMediaType(null);}} className="absolute top-2 left-2 bg-black/70 p-1.5 rounded-full"><X className="w-4 h-4 text-white"/></button>
             </div>
           )}
+          {uploading && <div className="mt-3 flex items-center gap-2 text-xs text-cyan-400"><Loader2 className="w-4 h-4 animate-spin"/> جاري ضغط الصورة...</div>}
         </div>
       </div>
       <div className="flex justify-between mt-3 pt-3 border-t border-white/5">
         <div className="flex gap-4 items-center">
-          <button onClick={()=>{fileRef.current!.accept="image/*"; fileRef.current?.click();}} className="flex gap-1.5 text-sm text-green-400"><ImageIcon className="w-5 h-5"/> صورة</button>
-          <button onClick={()=>{fileRef.current!.accept="video/*"; fileRef.current?.click();}} className="flex gap-1.5 text-sm text-red-400"><VideoIcon className="w-5 h-5"/> فيديو</button>
+          <label className="flex gap-1.5 text-sm text-green-400 cursor-pointer hover:opacity-80">
+            <ImageIcon className="w-5 h-5"/> صورة
+            <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={handleFile}/>
+          </label>
           <button onClick={()=>setShowFeelings(!showFeelings)} className="flex gap-1.5 text-sm text-yellow-400"><Smile className="w-5 h-5"/> شعور</button>
-          <input ref={fileRef} type="file" hidden onChange={handleFile}/>
         </div>
-        <button onClick={handlePost} className="bg-cyan-400 text-black font-black px-6 py-1.5 rounded-full flex gap-1"><Send className="w-4 h-4"/> نشر</button>
+        <button onClick={handlePost} disabled={uploading} className="bg-cyan-400 disabled:opacity-50 text-black font-black px-6 py-1.5 rounded-full flex gap-1 items-center">
+          {uploading? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>} نشر
+        </button>
       </div>
       {showFeelings && <div className="mt-3 grid grid-cols-3 gap-2 bg-black/60 border border-white/10 p-3 rounded-2xl">{feelingsList.map(f=><button key={f.id} onClick={()=>{setFeeling(f); setShowFeelings(false);}} className="flex gap-2 p-2 rounded-xl hover:bg-white/10 text-sm"><span className="text-xl">{f.icon}</span> {f.label}</button>)}</div>}
     </div>
