@@ -1,148 +1,199 @@
 "use client"
-import { useState, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { ArrowRight, Download, Play, Music, Upload } from "lucide-react"
+import { useState, useRef } from "react";
+import { Upload, Music, Play, Download, Video, Heart, GraduationCap, Cake, Sparkles, X, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
-export default function VideoMaker(){
-  const router = useRouter()
-  const canvasRef = useRef<any>(null)
-  const audioRef = useRef<any>(null)
-  const [audioFile, setAudioFile] = useState<any>(null)
-  const [audioUrl, setAudioUrl] = useState<any>(null)
-  const [form, setForm] = useState({
-    groom: "العريس",
-    bride: "العروس",
-    day: "التاريخ",
-    time: "الدعوة",
-    place: "المكان"
-  })
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [videoUrl, setVideoUrl] = useState<any>(null)
-  const [progress, setProgress] = useState(0)
+type Template = { id: string, name: string, icon: any, color: string, bg: string, textColor: string };
 
-  const handleAudioUpload = (e: any) => {
-    const file = e.target.files[0]
-    if(file){
-      setAudioFile(file)
-      const url = URL.createObjectURL(file)
-      setAudioUrl(url)
+const TEMPLATES: Template[] = [
+  { id: 'wedding', name: 'دعوة فرح', icon: Heart, color: 'from-pink-500 to-rose-600', bg: '#FFF0F3', textColor: '#880E4F' },
+  { id: 'graduation', name: 'تهنئة تخرج', icon: GraduationCap, color: 'from-amber-500 to-yellow-600', bg: '#FFF8E1', textColor: '#3E2723' },
+  { id: 'birthday', name: 'عيد ميلاد', icon: Cake, color: 'from-violet-500 to-purple-600', bg: '#F3E5F5', textColor: '#4A148C' },
+  { id: 'general', name: 'تهنئة عامة', icon: Sparkles, color: 'from-cyan-500 to-blue-600', bg: '#E0F7FA', textColor: '#006064' },
+];
+
+export default function VideoMakerPage(){
+  const [selectedTemplate, setSelectedTemplate] = useState<Template>(TEMPLATES[0]);
+  const [images, setImages] = useState<string[]>([]);
+  const [title, setTitle] = useState("دعوة فرح");
+  const [subtitle, setSubtitle] = useState("محمد & سارة");
+  const [dateText, setDateText] = useState("الجمعة 10 يناير - صالة لافندر");
+  const [musicFile, setMusicFile] = useState<File | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ffmpegRef = useRef<FFmpeg | null>(null);
+
+  const loadFFmpeg = async ()=>{
+    if(ffmpegLoaded) return;
+    const ffmpeg = new FFmpeg();
+    ffmpegRef.current = ffmpeg;
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    setFfmpegLoaded(true);
+  };
+
+  const handleImageUpload = (e:any)=>{
+    const files = Array.from(e.target.files) as File[];
+    files.slice(0,5).forEach(file=>{
+      const reader = new FileReader();
+      reader.onload = ev=> setImages(prev=> [...prev, ev.target?.result as string].slice(0,5));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const generateMP4 = async ()=>{
+    if(images.length===0){ alert("ارفع صورة واحدة على الأقل"); return; }
+    setIsGenerating(true);
+    setProgress(0);
+    setVideoUrl(null);
+    await loadFFmpeg();
+
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    canvas.width = 1080; canvas.height = 1920;
+
+    const loadedImages = await Promise.all(images.map(src=> new Promise<HTMLImageElement>(res=>{
+      const img = new Image(); img.src = src; img.onload = ()=>res(img);
+    })));
+
+    // 1- سجل فيديو خام بدون صوت
+    const stream = canvas.captureStream(30);
+    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = e=> chunks.push(e.data);
+
+    const videoBlobPromise = new Promise<Blob>(resolve=>{
+      recorder.onstop = ()=> resolve(new Blob(chunks, { type: 'video/webm' }));
+    });
+
+    recorder.start();
+    const duration = 15000;
+    const startTime = Date.now();
+
+    await new Promise<void>(resolve=>{
+      const draw = ()=>{
+        const elapsed = Date.now() - startTime;
+        const prog = Math.min(elapsed / duration, 1);
+        setProgress(Math.floor(prog*40)); // 0-40% للتسجيل
+
+        if(prog >= 1){ recorder.stop(); resolve(); return; }
+
+        ctx.fillStyle = selectedTemplate.bg;
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+
+        const imgIndex = Math.floor(prog * loadedImages.length) % loadedImages.length;
+        const img = loadedImages[imgIndex];
+        const scale = 1 + prog*0.15;
+        const iw = canvas.width * scale;
+        const ih = (img.height / img.width) * iw;
+        const y = canvas.height * 0.12;
+
+        ctx.save();
+        ctx.beginPath();
+        (ctx as any).roundRect(40, y, canvas.width-80, 900, 30);
+        ctx.clip();
+        ctx.drawImage(img, (canvas.width-iw)/2, y - (ih-900)/2, iw, ih);
+        ctx.restore();
+
+        ctx.fillStyle = selectedTemplate.textColor;
+        ctx.textAlign = 'center';
+        ctx.font = `bold 70px serif`;
+        ctx.fillText(title, canvas.width/2, 1250, canvas.width-100);
+        ctx.font = `600 55px sans-serif`;
+        ctx.fillText(subtitle, canvas.width/2, 1350, canvas.width-100);
+        ctx.font = `400 38px sans-serif`;
+        ctx.fillStyle = selectedTemplate.textColor + 'CC';
+        ctx.fillText(dateText, canvas.width/2, 1450, canvas.width-100);
+        ctx.font = `900 28px sans-serif`;
+        ctx.fillStyle = '#00000066';
+        ctx.fillText('Postatee.com', canvas.width/2, 1850);
+
+        if(prog < 1) requestAnimationFrame(draw);
+      };
+      draw();
+    });
+
+    const webmBlob = await videoBlobPromise;
+
+    // 2- حول لـ MP4 وادمج الموسيقى بـ ffmpeg
+    setIsConverting(true);
+    setProgress(50);
+    const ffmpeg = ffmpegRef.current!;
+
+    await ffmpeg.writeFile('video.webm', await fetchFile(webmBlob));
+
+    if(musicFile){
+      await ffmpeg.writeFile('music.mp3', await fetchFile(musicFile));
+      setProgress(70);
+      // دمج فيديو + موسيقى + قص 15 ثانية
+      await ffmpeg.exec(['-i', 'video.webm', '-i', 'music.mp3', '-c:v', 'libx264', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-y', 'output.mp4']);
+    } else {
+      await ffmpeg.exec(['-i', 'video.webm', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', 'output.mp4']);
     }
-  }
 
-  const generateVideo = async () => {
-    setIsGenerating(true)
-    setProgress(0)
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-    canvas.width = 1080
-    canvas.height = 1920
-    const canvasStream: any = canvas.captureStream(30)
-    let finalStream: any = canvasStream
-    let audioElement: any = null
-
-    if(audioUrl && audioRef.current){
-      audioElement = audioRef.current
-      audioElement.currentTime = 0
-      try{ await audioElement.play() }catch{}
-      try{
-        const audioCtx = new (window as any).AudioContext()
-        const source = audioCtx.createMediaElementSource(audioElement)
-        const dest = audioCtx.crKaNCgLvMEXxNzMxj2F7FYi1AdRrTo6Nhu()
-        source.connect(dest)
-        source.connect(audioCtx.destination)
-        const audioTrack = dest.stream.getAudioTracks()[0]
-        if(audioTrack){
-          finalStream = new MediaStream([...canvasStream.getVideoTracks(), audioTrack])
-        }
-      }catch(err){ console.log(err) }
-    }
-
-    const recorder = new MediaRecorder(finalStream, { mimeType: 'video/webm' })
-    const chunks: any[] = []
-    recorder.ondataavailable = (e: any) => chunks.push(e.data)
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' })
-      const url = URL.createObjectURL(blob)
-      setVideoUrl(url)
-      setIsGenerating(false)
-      if(audioElement) audioElement.pause()
-    }
-    recorder.start()
-    let frame = 0
-    const totalFrames = 450
-    const draw = () => {
-      if(frame >= totalFrames){ recorder.stop(); return }
-      setProgress(Math.floor((frame/totalFrames)*100))
-      const grad = ctx.createLinearGradient(0,0,0,1920)
-      grad.addColorStop(0, "#1a1600")
-      grad.addColorStop(1, "#0a0800")
-      ctx.fillStyle = grad
-      ctx.fillRect(0,0,1080,1920)
-      ctx.textAlign = "center"
-      ctx.fillStyle = "#FFD700"
-      ctx.font = "900 80px Cairo"
-      ctx.fillText("دعوة فرح", 540, 400)
-      ctx.fillStyle = "white"
-      ctx.font = "900 90px Cairo"
-      ctx.fillText(`${form.groom} & ${form.bride}`, 540, 700)
-      ctx.fillStyle = "#FFD700"
-      ctx.fillRect(390, 760, 300, 4)
-      ctx.fillStyle = "rgba(255,255,255,0.9)"
-      ctx.font = "700 50px Cairo"
-      ctx.fillText(form.day, 540, 900)
-      ctx.fillText(form.time, 540, 1000)
-      ctx.fillStyle = "#FFD700"
-      ctx.font = "700 55px Cairo"
-      ctx.fillText(form.place, 540, 1150)
-      frame++
-      requestAnimationFrame(draw)
-    }
-    draw()
-  }
-
-  const download = () => {
-    if(!videoUrl) return
-    const a = document.createElement('a')
-    a.href = videoUrl
-    a.download = `دعوة-${form.groom}-${form.bride}.webm`
-    a.click()
-  }
+    setProgress(90);
+    const data = await ffmpeg.readFile('output.mp4') as any;
+    const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
+    setVideoUrl(URL.createObjectURL(mp4Blob));
+    setProgress(100);
+    setIsGenerating(false);
+    setIsConverting(false);
+  };
 
   return (
-    <div className="min-h-screen bg-[#0B1418] text-white p-4" dir="rtl">
-      <div className="max-w-[500px] mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <button onClick={()=>router.push('/')} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><ArrowRight className="w-5 h-5"/></button>
-          <h1 className="font-black text-[22px]">مصنع الفيديو مع الأغنية 🎶</h1>
+    <div className="min-h-screen bg-[#0B1418] text-white" dir="rtl">
+      <div className="max-w-[900px] mx-auto p-4">
+        <div className="flex items-center justify-between mb-6">
+          <Link href="/" className="text-white/60">← رجوع</Link>
+          <h1 className="font-black text-xl flex items-center gap-2"><Video className="text-amber-400"/> مصنع MP4</h1>
+          <div className="w-10"/>
         </div>
-        <div className="bg-[#122025] rounded-2xl p-4 border border-[#1A2E35] mb-4">
-          <div className="grid grid-cols-2 gap-3">
-            <input value={form.groom} onChange={e=>setForm({...form, groom:e.target.value})} placeholder="العريس" className="bg-[#0B1418] border border-[#1A2E35] rounded-xl p-3" />
-            <input value={form.bride} onChange={e=>setForm({...form, bride:e.target.value})} placeholder="العروس" className="bg-[#0B1418] border border-[#1A2E35] rounded-xl p-3" />
-            <input value={form.day} onChange={e=>setForm({...form, day:e.target.value})} placeholder="اليوم" className="col-span-2 bg-[#0B1418] border border-[#1A2E35] rounded-xl p-3" />
-            <input value={form.time} onChange={e=>setForm({...form, time:e.target.value})} placeholder="الوقت" className="bg-[#0B1418] border border-[#1A2E35] rounded-xl p-3" />
-            <input value={form.place} onChange={e=>setForm({...form, place:e.target.value})} placeholder="المكان" className="bg-[#0B1418] border border-[#1A2E35] rounded-xl p-3" />
-          </div>
-          <div className="mt-4 bg-[#0B1418] border border-dashed border-amber-400/30 rounded-xl p-4">
-            <label className="flex flex-col items-center gap-2 cursor-pointer">
-              <div className="w-12 h-12 bg-amber-400/10 rounded-full flex items-center justify-center"><Music className="w-6 h-6 text-amber-400"/></div>
-              <span className="font-bold text-[13px]">{audioFile? `تم: ${audioFile.name}` : "ارفع الأغنية من جوالك (mp3)"}</span>
-              <input type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" />
-              <div className="mt-1 bg-white/10 px-4 py-2 rounded-full text-[12px] flex items-center gap-2"><Upload className="w-4 h-4"/> اختر الأغنية</div>
-            </label>
-            {audioUrl && <audio ref={audioRef} src={audioUrl} className="w-full mt-3" controls />}
-          </div>
-          <button onClick={generateVideo} disabled={isGenerating} className="w-full mt-4 bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-black py-4 rounded-xl flex items-center justify-center gap-2">
-            {isGenerating? `جاري ${progress}%` : <><Play className="w-5 h-5"/> اصنع الفيديو بالأغنية</>}
-          </button>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          {TEMPLATES.map(t=>{
+            const Icon = t.icon;
+            return <button key={t.id} onClick={()=>setSelectedTemplate(t)} className={`p-4 rounded-2xl border-2 ${selectedTemplate.id===t.id?'border-amber-400 bg-amber-400/10':'border-white/10 bg-white/[0.04]'}`}><div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center mx-auto mb-2`}><Icon className="text-white"/></div><p className="font-bold text-sm">{t.name}</p></button>
+          })}
         </div>
-        <canvas ref={canvasRef} className="w-full rounded-2xl border border-[#1A2E35] bg-black" style={{aspectRatio:'9/16'}} />
-        {videoUrl && (
-          <div className="mt-4 bg-[#122025] rounded-2xl p-4 border border-amber-400/30">
-            <video src={videoUrl} controls autoPlay loop className="w-full rounded-xl mb-3" />
-            <button onClick={download} className="w-full bg-amber-400 text-black font-black py-3 rounded-xl flex items-center justify-center gap-2"><Download className="w-5 h-5"/> تحميل الفيديو 📥</button>
+
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+              <h3 className="font-bold mb-3">الصور (5)</h3>
+              <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full bg-black/30 p-2 rounded-xl mb-3"/>
+              <div className="flex gap-2 flex-wrap">{images.map((img,i)=><div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden"><img src={img} className="w-full h-full object-cover"/><button onClick={()=>setImages(images.filter((_,idx)=>idx!==i))} className="absolute top-1 right-1 bg-red-500 rounded-full w-5 h-5 flex items-center justify-center"><X className="w-3 h-3"/></button></div>)}</div>
+            </div>
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 space-y-3">
+              <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="العنوان" className="w-full bg-black/30 border border-white/10 rounded-xl p-3"/>
+              <input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="الاسماء" className="w-full bg-black/30 border border-white/10 rounded-xl p-3"/>
+              <input value={dateText} onChange={e=>setDateText(e.target.value)} placeholder="التاريخ" className="w-full bg-black/30 border border-white/10 rounded-xl p-3"/>
+            </div>
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+              <h3 className="font-bold mb-3 flex items-center gap-2"><Music className="w-4 h-4"/> موسيقى MP3 من جهازك (اختياري)</h3>
+              <input type="file" accept="audio/mp3,audio/*" onChange={e=>setMusicFile(e.target.files[0])} className="w-full bg-black/30 p-2 rounded-xl"/>
+              {musicFile && <p className="text-xs text-green-400 mt-2">{musicFile.name}</p>}
+            </div>
+            <button onClick={generateMP4} disabled={isGenerating} className="w-full bg-amber-400 text-black font-black py-4 rounded-2xl flex items-center justify-center gap-2">
+              {isGenerating? <><Loader2 className="animate-spin"/>{isConverting? `بحول لـ MP4 ${progress}%` : `بصنع الفيديو ${progress}%`}</> : <><Play/> اصنع فيديو MP4</>}
+            </button>
+            <p className="text-[11px] text-white/40 text-center">الفيديو النهائي MP4 بشتغل في كل التلفونات والواتساب</p>
           </div>
-        )}
+          <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 flex flex-col items-center">
+            <h3 className="font-bold mb-3">المعاينة</h3>
+            <canvas ref={canvasRef} className="w-[270px] h-[480px] bg-black rounded-2xl border border-white/10"/>
+            {videoUrl && <div className="mt-4 w-full"><video src={videoUrl} controls className="w-full rounded-2xl bg-black"/><a href={videoUrl} download={`postatee-${selectedTemplate.id}.mp4`} className="mt-3 w-full bg-green-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Download/> تحميل MP4</a></div>}
+          </div>
+        </div>
       </div>
     </div>
   )
