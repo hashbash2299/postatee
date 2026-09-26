@@ -21,18 +21,17 @@ export default function MessageRoom(){
   const [chatId,setChatId]=useState("")
   const [showEmoji,setShowEmoji]=useState(false)
   const [activeReactId,setActiveReactId]=useState<string|null>(null)
-  const bottomRef=useRef<HTMLDivElement>(null)
+  const bottomRef=useRef<any>(null)
   const router=useRouter()
 
   useEffect(()=>{
-    // === تم التعديل هنا فقط - بدون ما يحتاج Index ===
     const qAds = collection(db,'golden_ads')
-    const unsubAds = onSnapshot(qAds as any, snap=>{
-      const all = snap.docs.map(d=>({id:d.id,...d.data()})) as any[]
+    const unsubAds = onSnapshot(qAds as any, (snap: any)=>{
+      const all = snap.docs.map((d: any)=>({id:d.id,...d.data()})) as any[]
       setAds(all.filter((a:any)=> a.active!== false))
     })
 
-    const unsub = onAuthStateChanged(auth, async (u)=>{
+    const unsub = onAuthStateChanged(auth, async (u: any)=>{
       if(!u) return router.push('/login')
       setMyUid(u.uid)
       const mySnap = await getDoc(doc(db,'users',u.uid))
@@ -41,7 +40,7 @@ export default function MessageRoom(){
       let otherId = ""
       if(id.includes('_')){
         finalChatId = id
-        otherId = id.split('_').find(p=> p!==u.uid) || ""
+        otherId = id.split('_').find((p: any)=> p!==u.uid) || ""
       } else {
         otherId = id
         finalChatId = [u.uid, otherId].sort().join('_')
@@ -58,20 +57,20 @@ export default function MessageRoom(){
         await setDoc(chatRef,{ members:[u.uid, otherId], created_at:serverTimestamp(), updated_at:serverTimestamp(), lastMessage:"" })
       }
       const q = query(collection(db,'chats',finalChatId,'messages'), orderBy('created_at','asc'))
-      const unsubMsg = onSnapshot(q, async (snap)=>{
-        setMessages(snap.docs.map(d=>({id:d.id,...d.data()})) as any[])
+      const unsubMsg = onSnapshot(q, async (snap: any)=>{
+        setMessages(snap.docs.map((d: any)=>({id:d.id,...d.data()})) as any[])
         setTimeout(()=> bottomRef.current?.scrollIntoView({behavior:'smooth'}), 80)
-        const unread = snap.docs.filter(d=> d.data().to===u.uid &&!d.data().read)
+        const unread = snap.docs.filter((d: any)=> d.data().to===u.uid &&!d.data().read)
         if(unread.length>0){
           const batch = writeBatch(db)
-          unread.forEach(d=> batch.update(d.ref,{read:true}))
+          unread.forEach((d: any)=> batch.update(d.ref,{read:true}))
           await batch.commit()
         }
       })
       return ()=> unsubMsg()
     })
     return ()=> { unsub(); unsubAds(); }
-  },[id])
+  },[id, router])
 
   const handleSend = async ()=>{
     if(!text.trim() ||!myUid ||!chatId) return
@@ -88,14 +87,13 @@ export default function MessageRoom(){
 
   return (
     <div className="h-[100dvh] bg-[#080e0e] flex overflow-hidden" dir="rtl">
-      {/* الشمال: اعلانات - لابتوب فقط */}
       <div className="hidden lg:flex w-[360px] xl:w-[400px] bg-[#0a1416] border-l border-white/10 flex-col overflow-y-auto shrink-0">
         <div className="p-4 border-b border-white/10 bg-[#122025] sticky top-0 z-10">
           <div className="flex items-center gap-2"><Crown className="w-5 h-5 text-yellow-400"/><h3 className="font-bold text-white text-[15px]">الشركاء الذهبيون</h3><span className="mr-auto bg-yellow-400/20 text-yellow-400 text-[10px] px-2 py-1 rounded-full font-bold">ممول</span></div>
         </div>
         <div className="p-3 space-y-4">
           {ads.length===0 && <p className="text-white/20 text-[12px] text-center py-10">لا توجد اعلانات حاليا - اضف من لوحة الادمن</p>}
-          {ads.map((ad,i)=>(
+          {ads.map((ad: any,i: number)=>(
             <a key={ad.id} href={ad.link||'#'} target="_blank" className={`relative rounded-[18px] overflow-hidden group cursor-pointer border block ${i===0?'h-[280px] border-yellow-400/20':'h-[160px] border-white/10'}`}>
               <img src={ad.img} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
               <div className={`absolute inset-0 bg-gradient-to-t ${ad.color||'from-yellow-400 to-orange-500'} opacity-60 mix-blend-multiply`}></div>
@@ -112,7 +110,6 @@ export default function MessageRoom(){
         </div>
       </div>
 
-      {/* اليمين: الدردشة */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-[56px] bg-[#122025] border-b border-white/10 flex items-center gap-3 px-4 shrink-0">
           <button onClick={()=>router.push('/messages')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><ArrowLeft className="w-5 h-5 text-white"/></button>
@@ -120,7 +117,7 @@ export default function MessageRoom(){
           <div className="flex flex-col"><span className="font-bold text-white text-[14px]">{friendData?.displayName || 'محادثة'}</span><span className="text-[11px] text-white/40">متصل الآن</span></div>
         </header>
         <div className="flex-1 overflow-y-auto p-3 bg-[#080e0e]"><div className="max-w-[700px] mx-auto w-full space-y-3">
-          {messages.map(m=>{
+          {messages.map((m: any)=>{
             const isMe = m.from===myUid
             return (
               <div key={m.id} className={`flex gap-2 items-end w-full ${isMe?'justify-start':'justify-end'}`}>
