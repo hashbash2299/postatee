@@ -1,9 +1,7 @@
 "use client"
 import { useState, useRef } from "react";
-import { Music, Play, Download, Video, Heart, GraduationCap, Cake, Sparkles, X, Loader2 } from "lucide-react";
+import { Music, Play, Download, Video, Heart, GraduationCap, Cake, Sparkles, X } from "lucide-react";
 import Link from "next/link";
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 type Template = { id: string; name: string; icon: any; color: string; bg: string; textColor: string };
 const TEMPLATES: Template[] = [
@@ -14,136 +12,120 @@ const TEMPLATES: Template[] = [
 ];
 
 export default function VideoMakerPage(){
-  const [selectedTemplate, setSelectedTemplate] = useState<Template>(TEMPLATES[0]);
+  const [selectedTemplate, setSelectedTemplate] = useState(TEMPLATES[1]);
   const [images, setImages] = useState<string[]>([]);
-  const [title, setTitle] = useState("دعوة فرح");
-  const [subtitle, setSubtitle] = useState("محمد & سارة");
+  const [title, setTitle] = useState("تهنئة تخرج");
+  const [subtitle, setSubtitle] = useState("مريم");
   const [dateText, setDateText] = useState("الجمعة 10 يناير - صالة لافندر");
   const [musicFile, setMusicFile] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isConverting, setIsConverting] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
-  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const ffmpegRef = useRef<FFmpeg | null>(null);
-
-  const loadFFmpeg = async ()=>{
-    if(ffmpegLoaded) return;
-    const ffmpeg = new FFmpeg();
-    ffmpegRef.current = ffmpeg;
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-    setFfmpegLoaded(true);
-  };
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>)=>{
-    const fileList = e.target.files;
-    if(!fileList) return;
-    const files = Array.from(fileList) as File[];
-    files.slice(0,5).forEach(file=>{
-      const reader = new FileReader();
-      reader.onload = ev=> setImages(prev=> [...prev, ev.target?.result as string].slice(0,5));
-      reader.readAsDataURL(file);
+    const list = e.target.files; if(!list) return;
+    Array.from(list).slice(0,5).forEach(file=>{
+      const r = new FileReader();
+      r.onload = ev=> setImages(p=> [...p, ev.target?.result as string].slice(0,5));
+      r.readAsDataURL(file);
     });
   };
 
-  const handleMusicUpload = (e: React.ChangeEvent<HTMLInputElement>)=>{
-    const f = e.target.files?.[0];
-    if(f) setMusicFile(f);
-  };
-
-  const generateMP4 = async ()=>{
-    if(images.length===0){ alert("ارفع صورة واحدة على الأقل"); return; }
-    setIsGenerating(true); setProgress(0); setVideoUrl(null);
-    await loadFFmpeg();
-    const canvas = canvasRef.current!;
-    const ctx = canvas.getContext('2d')!;
+  const generate = async ()=>{
+    if(images.length===0){ alert("ارفع صورة"); return; }
+    setIsGenerating(true); setVideoUrl(null); setProgress(0);
+    const canvas = canvasRef.current!; const ctx = canvas.getContext('2d')!;
     canvas.width = 1080; canvas.height = 1920;
-    const loadedImages = await Promise.all(images.map(src=> new Promise<HTMLImageElement>(res=>{
-      const img = new Image(); img.src = src; img.onload = ()=>res(img);
-    })));
-    const stream = canvas.captureStream(30);
-    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-    const chunks: Blob[] = [];
-    recorder.ondataavailable = ev=> chunks.push(ev.data);
-    const videoBlobPromise = new Promise<Blob>(resolve=>{
-      recorder.onstop = ()=> resolve(new Blob(chunks, { type: 'video/webm' }));
-    });
-    recorder.start();
-    const duration = 15000;
-    const startTime = Date.now();
-    await new Promise<void>(resolve=>{
-      const draw = ()=>{
-        const elapsed = Date.now() - startTime;
-        const prog = Math.min(elapsed / duration, 1);
-        setProgress(Math.floor(prog*40));
-        if(prog >= 1){ recorder.stop(); resolve(); return; }
-        ctx.fillStyle = selectedTemplate.bg;
-        ctx.fillRect(0,0,canvas.width,canvas.height);
-        const imgIndex = Math.floor(prog * loadedImages.length) % loadedImages.length;
-        const img = loadedImages[imgIndex];
-        const scale = 1 + prog*0.15;
-        const iw = canvas.width * scale;
-        const ih = (img.height / img.width) * iw;
-        const y = canvas.height * 0.12;
-        ctx.save();
-        ctx.beginPath();
-        (ctx as any).roundRect(40, y, canvas.width-80, 900, 30);
-        ctx.clip();
-        ctx.drawImage(img, (canvas.width-iw)/2, y - (ih-900)/2, iw, ih);
-        ctx.restore();
-        ctx.fillStyle = selectedTemplate.textColor;
-        ctx.textAlign = 'center';
-        ctx.font = `bold 70px serif`;
-        ctx.fillText(title, canvas.width/2, 1250, canvas.width-100);
-        ctx.font = `600 55px sans-serif`;
-        ctx.fillText(subtitle, canvas.width/2, 1350, canvas.width-100);
-        ctx.font = `400 38px sans-serif`;
-        ctx.fillStyle = selectedTemplate.textColor + 'CC';
-        ctx.fillText(dateText, canvas.width/2, 1450, canvas.width-100);
-        ctx.font = `900 28px sans-serif`;
-        ctx.fillStyle = '#00000066';
-        ctx.fillText('Postatee.com', canvas.width/2, 1850);
-        if(prog < 1) requestAnimationFrame(draw);
-      };
-      draw();
-    });
-    const webmBlob = await videoBlobPromise;
-    setIsConverting(true); setProgress(50);
-    const ffmpeg = ffmpegRef.current!;
-    await ffmpeg.writeFile('video.webm', await fetchFile(webmBlob));
-    if(musicFile){
-      await ffmpeg.writeFile('music.mp3', await fetchFile(musicFile));
-      setProgress(70);
-      await ffmpeg.exec(['-i', 'video.webm', '-i', 'music.mp3', '-c:v', 'libx264', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-y', 'output.mp4']);
-    } else {
-      await ffmpeg.exec(['-i', 'video.webm', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', 'output.mp4']);
+    const loaded = await Promise.all(images.map(s=> new Promise<HTMLImageElement>(r=>{ const im=new Image(); im.src=s; im.onload=()=>r(im);})));
+
+    // صوت
+    let audioStream: MediaStream | null = null;
+    if(musicFile && audioRef.current){
+      const url = URL.createObjectURL(musicFile);
+      audioRef.current.src = url;
+      audioRef.current.loop = true;
+      try{ await audioRef.current.play(); }catch{}
+      const aStream = (audioRef.current as any).captureStream?.() || (audioRef.current as any).mozCaptureStream?.();
+      if(aStream) audioStream = aStream;
     }
-    setProgress(90);
-    const data = await ffmpeg.readFile('output.mp4') as any;
-    const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
-    setVideoUrl(URL.createObjectURL(mp4Blob));
-    setProgress(100); setIsGenerating(false); setIsConverting(false);
+
+    const canvasStream = canvas.captureStream(30);
+    const tracks = [...canvasStream.getVideoTracks()];
+    if(audioStream) tracks.push(...audioStream.getAudioTracks());
+    const finalStream = new MediaStream(tracks);
+
+    const recorder = new MediaRecorder(finalStream, { mimeType: 'video/webm;codecs=vp9' });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = e=> { if(e.data.size>0) chunks.push(e.data); };
+    recorder.onstop = ()=>{
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      setVideoUrl(URL.createObjectURL(blob));
+      setIsGenerating(false);
+      if(audioRef.current){ audioRef.current.pause(); }
+    };
+
+    recorder.start(100);
+    const DURATION = 15000; const start = Date.now();
+
+    const draw = ()=>{
+      const elapsed = Date.now()-start;
+      const prog = Math.min(elapsed/DURATION,1);
+      setProgress(Math.floor(prog*100));
+      if(prog>=1){ recorder.stop(); return; }
+
+      ctx.fillStyle = selectedTemplate.bg;
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      const idx = Math.floor(prog*loaded.length)%loaded.length;
+      const img = loaded[idx];
+      const scale = 1 + prog*0.2;
+      const iw = canvas.width*scale;
+      const ih = (img.height/img.width)*iw;
+      const y = 120;
+      ctx.save();
+      ctx.beginPath();
+      (ctx as any).roundRect(40,y,canvas.width-80,900,32);
+      ctx.clip();
+      ctx.drawImage(img, (canvas.width-iw)/2, y-(ih-900)/2, iw, ih);
+      ctx.restore();
+
+      // ظل خفيف
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      ctx.beginPath();
+      (ctx as any).roundRect(40,y,canvas.width-80,900,32);
+      ctx.fill();
+
+      ctx.textAlign='center';
+      ctx.fillStyle=selectedTemplate.textColor;
+      ctx.font='bold 78px serif';
+      ctx.fillText(title, 540, 1250, 980);
+      ctx.font='800 62px sans-serif';
+      ctx.fillText(subtitle, 540, 1360, 980);
+      ctx.font='500 38px sans-serif';
+      ctx.fillStyle=selectedTemplate.textColor+'CC';
+      ctx.fillText(dateText, 540, 1450, 980);
+
+      requestAnimationFrame(draw);
+    };
+    draw();
+    setTimeout(()=>{ if(recorder.state==='recording') recorder.stop(); }, DURATION+500);
   };
 
   return (
     <div className="min-h-screen bg-[#0B1418] text-white" dir="rtl">
       <div className="max-w-[900px] mx-auto p-4">
-        <div className="flex items-center justify-between mb-6"><Link href="/" className="text-white/60">← رجوع</Link><h1 className="font-black text-xl flex items-center gap-2"><Video className="text-amber-400"/> مصنع MP4</h1><div className="w-10"/></div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">{TEMPLATES.map(t=>{const Icon=t.icon;return <button key={t.id} onClick={()=>setSelectedTemplate(t)} className={`p-4 rounded-2xl border-2 ${selectedTemplate.id===t.id?'border-amber-400 bg-amber-400/10':'border-white/10 bg-white/[0.04]'}`}><div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center mx-auto mb-2`}><Icon className="text-white"/></div><p className="font-bold text-sm">{t.name}</p></button>})}</div>
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4"><h3 className="font-bold mb-3">الصور (5)</h3><input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full bg-black/30 p-2 rounded-xl mb-3"/><div className="flex gap-2 flex-wrap">{images.map((img,i)=><div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden"><img src={img} className="w-full h-full object-cover"/><button onClick={()=>setImages(prev=>prev.filter((_,idx)=>idx!==i))} className="absolute top-1 right-1 bg-red-500 rounded-full w-5 h-5 flex items-center justify-center"><X className="w-3 h-3"/></button></div>)}</div></div>
-            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 space-y-3"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="العنوان" className="w-full bg-black/30 border border-white/10 rounded-xl p-3"/><input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="الاسماء" className="w-full bg-black/30 border border-white/10 rounded-xl p-3"/><input value={dateText} onChange={e=>setDateText(e.target.value)} placeholder="التاريخ" className="w-full bg-black/30 border border-white/10 rounded-xl p-3"/></div>
-            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4"><h3 className="font-bold mb-3 flex items-center gap-2"><Music className="w-4 h-4"/> موسيقى MP3 من جهازك</h3><input type="file" accept="audio/mp3,audio/*" onChange={handleMusicUpload} className="w-full bg-black/30 p-2 rounded-xl"/>{musicFile && <p className="text-xs text-green-400 mt-2">{musicFile.name}</p>}</div>
-            <button onClick={generateMP4} disabled={isGenerating} className="w-full bg-amber-400 text-black font-black py-4 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50">{isGenerating? <><Loader2 className="animate-spin"/>{isConverting? `بحول لـ MP4 ${progress}%` : `بصنع الفيديو ${progress}%`}</> : <><Play/> اصنع فيديو MP4</>}</button>
-            <p className="text-[11px] text-white/40 text-center">MP4 بشتغل في كل التلفونات والواتساب</p>
+        <div className="flex justify-between mb-4"><Link href="/" className="text-white/60">← رجوع</Link><h1 className="font-black flex gap-2"><Video className="text-amber-400"/> مصنع الفيديو</h1><div className="w-10"/></div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">{TEMPLATES.map(t=>{ const I=t.icon; return <button key={t.id} onClick={()=>setSelectedTemplate(t)} className={`p-3 rounded-2xl border-2 ${selectedTemplate.id===t.id?'border-amber-400 bg-amber-400/10':'border-white/10 bg-white/[0.03]'}`}><div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center mx-auto mb-1`}><I className="text-white w-5 h-5"/></div><p className="text-xs font-bold">{t.name}</p></button>})}</div>
+        <div className="grid lg:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3"><input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full text-sm"/><div className="flex gap-2 mt-2 flex-wrap">{images.map((im,i)=><div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden"><img src={im} className="w-full h-full object-cover"/><button onClick={()=>setImages(p=>p.filter((_,k)=>k!==i))} className="absolute top-0 right-0 bg-red-500 rounded-full w-4 h-4 flex items-center justify-center"><X className="w-3 h-3"/></button></div>)}</div></div>
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 space-y-2"><input value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5"/><input value={subtitle} onChange={e=>setSubtitle(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5"/><input value={dateText} onChange={e=>setDateText(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5"/></div>
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3"><p className="text-sm font-bold mb-2 flex gap-2"><Music className="w-4 h-4"/> موسيقى MP3 من جهازك</p><input type="file" accept="audio/*" onChange={e=>{const f=e.target.files?.[0]; if(f) setMusicFile(f);}} className="w-full text-sm"/><audio ref={audioRef} hidden/>{musicFile && <p className="text-xs text-green-400 mt-1">{musicFile.name}</p>}</div>
+            <button onClick={generate} disabled={isGenerating} className="w-full bg-amber-400 text-black font-black py-3.5 rounded-2xl">{isGenerating? `بصنع الفيديو ${progress}%` : '▶ اصنع الفيديو 15 ثانية'}</button>
           </div>
-          <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 flex flex-col items-center"><h3 className="font-bold mb-3">المعاينة</h3><canvas ref={canvasRef} className="w-[270px] h-[480px] bg-black rounded-2xl border border-white/10"/><div className="mt-4 w-full">{videoUrl && <><video src={videoUrl} controls className="w-full rounded-2xl bg-black"/><a href={videoUrl} download={`postatee-${selectedTemplate.id}.mp4`} className="mt-3 w-full bg-green-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Download/> تحميل MP4</a></>}</div></div>
+          <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 flex flex-col items-center"><canvas ref={canvasRef} width={1080} height={1920} className="w-[260px] h-[462px] bg-black rounded-2xl border border-white/10"/><div className="mt-3 w-full">{videoUrl && <><video src={videoUrl} controls className="w-full rounded-xl bg-black"/><a href={videoUrl} download={`postatee-${Date.now()}.webm`} className="mt-2 w-full bg-green-500 text-white font-bold py-3 rounded-xl flex justify-center gap-2"><Download/> تحميل الفيديو</a><p className="text-[10px] text-white/40 text-center mt-2">لو عايزو MP4 للايفون قول لي احولو ليك في السيرفر</p></>}</div></div>
         </div>
       </div>
     </div>
