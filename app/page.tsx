@@ -5,7 +5,7 @@ import { collection, onSnapshot, doc, getDoc, updateDoc, setDoc, where, query } 
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, LogOut, Bell, MessageCircle } from "lucide-react";
+import { Users, LogOut, Bell, MessageCircle, Video, Sparkles } from "lucide-react";
 import CreatePost from "../components/feed/CreatePost";
 import PostCard from "../components/feed/PostCard";
 import Stories from "../components/feed/Stories";
@@ -57,7 +57,6 @@ export default function Page(){
   }, [router]);
 
   useEffect(() => {
-    // ✅ بدون orderBy عشان ما يحتاج Index وما يختفي
     const unsub = onSnapshot(collection(db, "posts"), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id,...d.data() }));
       data.sort((a:any,b:any)=>{
@@ -108,6 +107,25 @@ export default function Page(){
         <aside className="hidden lg:flex w-[300px] bg-[#122025] flex-col p-4 border-l border-[#1A2E35]"><h3 className="font-bold mb-3 fb-font">جهات الاتصال</h3></aside>
         <main className="flex-1 max-w-[720px] mx-auto w-full pb-[80px] lg:pb-0">
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 p-4 border-b lg:border border-[#1A2E35]"><Stories currentUser={currentUser} /></div>
+
+          {/* ✅ زر مصنع الفيديو الجديد */}
+          <div className="mx-0 lg:mx-4 mt-2 lg:mt-4">
+            <Link href="/video-maker">
+              <div className="bg-gradient-to-r from-[#FFD700] via-[#FFC700] to-[#FFB000] rounded-2xl p-[2px] cursor-pointer hover:scale-[1.01] transition-all">
+                <div className="bg-[#1A2E35] rounded-[14px] p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-yellow-600 rounded-xl flex items-center justify-center shadow-lg"><Video className="w-6 h-6 text-black" /></div>
+                    <div>
+                      <h3 className="font-black text-[16px] text-white fb-font flex items-center gap-1">اصنع فيديو مجاناً <Sparkles className="w-4 h-4 text-amber-400" /></h3>
+                      <p className="text-[12px] text-white/60 fb-font">دعوة فرح • تهنئة • تخرج • 15 ثانية</p>
+                    </div>
+                  </div>
+                  <div className="bg-amber-400 text-black px-4 py-2 rounded-full font-black text-[13px] fb-font">جرب الآن</div>
+                </div>
+              </div>
+            </Link>
+          </div>
+
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 mt-2 lg:mt-4 border-y lg:border border-[#1A2E35]"><CreatePost currentUser={currentUser} /></div>
           <div className="space-y-2">{posts.filter(p=>!hiddenPosts.includes(p.id)).map(post=>(<div key={post.id} className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] overflow-hidden"><PostCard post={post} currentUser={currentUser} onHide={()=>setHiddenPosts([...hiddenPosts, post.id])} onStartEdit={(p:any)=>{ setEditingPost(p); setEditingContent(p.content); }} isEditing={editingPost?.id===post.id} editingContent={editingContent} setEditingContent={setEditingContent} onSaveEdit={async()=>{ await updateDoc(doc(db,'posts',editingPost.id),{content:editingContent}); setEditingPost(null); }} onCancelEdit={()=>setEditingPost(null)} commentText={commentText} setCommentText={setCommentText} openComments={openComments} setOpenComments={setOpenComments} /></div>))}</div>
           <div className="lg:hidden p-4">
