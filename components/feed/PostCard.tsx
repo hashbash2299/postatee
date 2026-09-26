@@ -64,6 +64,8 @@ function CommentsList({ postId }: any){
 
 export default function PostCard({ post, currentUser, onHide, onStartEdit, isEditing, editingContent, setEditingContent, onSaveEdit, onCancelEdit, commentText, setCommentText, openComments, setOpenComments }: any){
 
+  const [expanded, setExpanded] = useState(false);
+
   const createNotification = async (type:'like'|'comment', extraText:string = '') => {
     const postOwnerId = post.authorId || post.uid;
     if(!postOwnerId || postOwnerId === currentUser.uid) return;
@@ -78,7 +80,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
         type: type,
         postId: post.id,
         postContent: post.content?.slice(0,50) || '',
-        text: type === 'like' ? 'أعجب بمنشورك' : `علق على منشورك: ${extraText.slice(0,30)}`,
+        text: type === 'like'? 'أعجب بمنشورك' : `علق على منشورك: ${extraText.slice(0,30)}`,
         read: false,
         created_at: serverTimestamp(),
         createdAt: serverTimestamp()
@@ -100,22 +102,32 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
   };
 
   const handleComment = async()=>{
-    const txt = commentText[post.id]; 
+    const txt = commentText[post.id];
     if(!txt?.trim()) return;
-    await addDoc(collection(db,'posts',post.id,'comments'), { 
-      text: txt, 
-      created_at: serverTimestamp(), 
-      uid: currentUser.uid, 
-      authorId: currentUser.uid, 
-      authorName: currentUser.displayName, 
-      authorAvatar: currentUser.photoURL || currentUser.avatar, 
-      authorRole: currentUser.role || "", 
-      authorUsername: currentUser.username 
+    await addDoc(collection(db,'posts',post.id,'comments'), {
+      text: txt,
+      created_at: serverTimestamp(),
+      uid: currentUser.uid,
+      authorId: currentUser.uid,
+      authorName: currentUser.displayName,
+      authorAvatar: currentUser.photoURL || currentUser.avatar,
+      authorRole: currentUser.role || "",
+      authorUsername: currentUser.username
     });
     await updateDoc(doc(db,'posts',post.id), { commentsCount: increment(1) });
     await createNotification('comment', txt);
     setCommentText((prev:any)=>({...prev,[post.id]:""}));
   };
+
+  const content = post.content || "";
+  const isLong = content.length > 180;
+  const isShortPost =!post.image &&!post.video && content.length < 85;
+
+  const contentClass = isShortPost
+  ? "text-[22px] md:text-[24px] leading-[28px] md:leading-[30px] font-medium"
+    : "text-[14px] md:text-[15px] leading-[19px] md:leading-[20px] font-normal text-white/90";
+
+  const displayText =!isLong || expanded? content : content.slice(0, 180) + "...";
 
   return (
     <div id={`post-${post.id}`} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
@@ -130,16 +142,23 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       {isEditing? (
         <div className="mt-3"><textarea value={editingContent} onChange={e=>setEditingContent(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none min-h-[80px]"/><div className="flex gap-2 mt-2"><button onClick={onSaveEdit} className="bg-violet-500 text-white px-4 py-1.5 rounded-full text-sm font-bold">حفظ</button><button onClick={onCancelEdit} className="bg-white/10 px-4 py-1.5 rounded-full text-sm">إلغاء</button></div></div>
       ) : (
-        <p className="mt-3 text-[15px] whitespace-pre-wrap leading-6">{post.content}</p>
+        <div className="mt-3">
+          <p className={`whitespace-pre-wrap break-words ${contentClass}`}>{displayText}</p>
+          {isLong && (
+            <button onClick={()=>setExpanded(!expanded)} className="mt-1 text-[13px] font-bold text-white/60 hover:text-white">
+              {expanded? "عرض أقل" : "عرض المزيد"}
+            </button>
+          )}
+        </div>
       )}
 
-      {post.image && <img src={post.image} className="mt-3 rounded-xl w-full"/>}
+      {post.image && <img src={post.image} className="mt-3 rounded-xl w-full object-cover max-h-[500px]"/>}
       {post.video && <video src={post.video} controls className="mt-3 rounded-xl w-full bg-black"/>}
 
-      <div className="flex justify-between mt-4 pt-3 border-t border-white/5">
-        <button onClick={handleLike} className={`flex gap-1.5 text-sm items-center ${post.likes?.includes(currentUser?.uid)?'text-red-500':'text-white/50'}`}><Heart className={`w-5 h-5 ${post.likes?.includes(currentUser?.uid)?'fill-red-500':''}`}/> {post.likesCount||0}</button>
-        <button onClick={()=>setOpenComments((p:any)=>({...p,[post.id]:!p[post.id]}))} className="flex gap-1.5 text-sm text-white/50 items-center"><MessageCircle className="w-5 h-5"/> {post.commentsCount||0}</button>
-        <button className="flex gap-1.5 text-sm text-white/50 items-center"><Share2 className="w-5 h-5"/> مشاركة</button>
+      <div className="flex justify-between mt-3 pt-3 border-t border-white/5">
+        <button onClick={handleLike} className={`flex gap-1.5 text-[13px] items-center ${post.likes?.includes(currentUser?.uid)?'text-red-500':'text-white/50'}`}><Heart className={`w-[18px] h-[18px] ${post.likes?.includes(currentUser?.uid)?'fill-red-500':''}`}/> {post.likesCount||0}</button>
+        <button onClick={()=>setOpenComments((p:any)=>({...p,[post.id]:!p[post.id]}))} className="flex gap-1.5 text-[13px] text-white/50 items-center"><MessageCircle className="w-[18px] h-[18px]"/> {post.commentsCount||0}</button>
+        <button className="flex gap-1.5 text-[13px] text-white/50 items-center"><Share2 className="w-[18px] h-[18px]"/> مشاركة</button>
       </div>
 
       {openComments[post.id] && (
@@ -147,7 +166,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
           <div className="flex gap-2">
             <img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=12`} className="w-7 h-7 rounded-full"/>
             <div className="flex-1 flex gap-2">
-              <input value={commentText[post.id]||""} onChange={e=>setCommentText((prev:any)=>({...prev,[post.id]:e.target.value}))} placeholder="اكتب تعليق..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-sm outline-none"/>
+              <input value={commentText[post.id]||""} onChange={e=>setCommentText((prev:any)=>({...prev,[post.id]:e.target.value}))} placeholder="اكتب تعليق..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-[13px] outline-none"/>
               <button onClick={handleComment} className="bg-violet-500 text-white rounded-full w-8 h-8 flex items-center justify-center"><Send className="w-4 h-4"/></button>
             </div>
           </div>
