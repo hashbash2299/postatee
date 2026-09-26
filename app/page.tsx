@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react";
 import { db, auth } from "./lib/firebase";
-import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc, setDoc, where } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc, updateDoc, setDoc, where, query } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -47,36 +47,25 @@ export default function Page(){
           await setDoc(userRef, { uid: u.uid, email: u.email, displayName: u.displayName || 'محمد أحمد', username: 'mohammed_' + u.uid.slice(0,5), role: 'مالك', profileCompleted: true, followers: 0, following: 0, photoURL: u.photoURL || null, createdAt: new Date() }, { merge: true });
           snap = await getDoc(userRef);
         }
-        const data = snap.data();
-        setCurrentUser({...data, uid: u.uid });
-
+        setCurrentUser({...snap.data(), uid: u.uid });
         unsubReq = onSnapshot(query(collection(db,'friendRequests'), where('to','==', u.uid), where('status','==','pending')), s=> setReqCount(s.size));
-        unsubNotif = onSnapshot(query(collection(db,'notifications'), where('toUid','==', u.uid)), s=> {
-          const unread = s.docs.filter(d=> d.data().read === false).length;
-          setNotifCount(unread);
-        });
-        unsubMsg = onSnapshot(query(collection(db,'chats'), where('members','array-contains', u.uid)), s=>{ setMsgCount(s.size); });
+        unsubNotif = onSnapshot(query(collection(db,'notifications'), where('toUid','==', u.uid)), s=> setNotifCount(s.docs.filter(d=> d.data().read === false).length));
+        unsubMsg = onSnapshot(query(collection(db,'chats'), where('members','array-contains', u.uid)), s=> setMsgCount(s.size));
       } finally { setLoading(false); }
     });
     return () => { unsub(); if(unsubReq) unsubReq(); if(unsubNotif) unsubNotif(); if(unsubMsg) unsubMsg(); }
   }, [router]);
 
   useEffect(() => {
-    // ✅ الحل النهائي للاختفاء: نرتب بـ createdAtMillis بدل created_at
-    const q = query(collection(db, "posts"), orderBy("createdAtMillis", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
+    // ✅ بدون orderBy عشان ما يحتاج Index وما يختفي
+    const unsub = onSnapshot(collection(db, "posts"), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id,...d.data() }));
-      // لو في منشورات قديمة ما عندها createdAtMillis نرتبها بالـ created_at
       data.sort((a:any,b:any)=>{
-        const am = a.createdAtMillis || a.created_at?.seconds*1000 || 0;
-        const bm = b.createdAtMillis || b.created_at?.seconds*1000 || 0;
-        return bm - am;
+        const aTime = a.createdAtMillis || a.created_at?.seconds*1000 || a.created_at?.toDate?.()?.getTime() || 0;
+        const bTime = b.createdAtMillis || b.created_at?.seconds*1000 || b.created_at?.toDate?.()?.getTime() || 0;
+        return bTime - aTime;
       });
       setPosts(data);
-    }, (err)=>{
-      // fallback لو الفهرس لسه ما اتعمل
-      const q2 = query(collection(db, "posts"), orderBy("created_at", "desc"));
-      onSnapshot(q2, (snap)=> setPosts(snap.docs.map(d => ({ id: d.id,...d.data() }))));
     });
     return () => unsub();
   }, []);
@@ -122,7 +111,7 @@ export default function Page(){
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 mt-2 lg:mt-4 border-y lg:border border-[#1A2E35]"><CreatePost currentUser={currentUser} /></div>
           <div className="space-y-2">{posts.filter(p=>!hiddenPosts.includes(p.id)).map(post=>(<div key={post.id} className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] overflow-hidden"><PostCard post={post} currentUser={currentUser} onHide={()=>setHiddenPosts([...hiddenPosts, post.id])} onStartEdit={(p:any)=>{ setEditingPost(p); setEditingContent(p.content); }} isEditing={editingPost?.id===post.id} editingContent={editingContent} setEditingContent={setEditingContent} onSaveEdit={async()=>{ await updateDoc(doc(db,'posts',editingPost.id),{content:editingContent}); setEditingPost(null); }} onCancelEdit={()=>setEditingPost(null)} commentText={commentText} setCommentText={setCommentText} openComments={openComments} setOpenComments={setOpenComments} /></div>))}</div>
           <div className="lg:hidden p-4">
-            <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold fb-font"><LogOut className="w-5 h-5" /> تسجيل خروج</button>
+            <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold fb-font active:scale-95"><LogOut className="w-5 h-5" /> تسجيل خروج</button>
           </div>
         </main>
         <aside className="hidden lg:block w-[320px] bg-[#122025] p-4 border-r border-[#1A2E35]"><button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold fb-font"><LogOut className="w-5 h-5" /> خروج</button></aside>

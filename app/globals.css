@@ -1,18 +1,12 @@
-@import "tailwindcss";
-
-:root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-}
-
-/* خط فيسبوك العربي الاصلي - يشتغل في كل الاجهزة */
-.fb-font {
-  font-family: "Segoe UI Historic", "Segoe UI", "SF Pro Display", "Helvetica", "Arial", "Tajawal", sans-serif !important;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: #0B1418;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.fb-font {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif!important;
 }
