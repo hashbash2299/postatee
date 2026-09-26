@@ -51,23 +51,33 @@ export default function Page(){
         setCurrentUser({...data, uid: u.uid });
 
         unsubReq = onSnapshot(query(collection(db,'friendRequests'), where('to','==', u.uid), where('status','==','pending')), s=> setReqCount(s.size));
-
         unsubNotif = onSnapshot(query(collection(db,'notifications'), where('toUid','==', u.uid)), s=> {
           const unread = s.docs.filter(d=> d.data().read === false).length;
           setNotifCount(unread);
         });
-
-        unsubMsg = onSnapshot(query(collection(db,'chats'), where('members','array-contains', u.uid)), s=>{
-          setMsgCount(s.size);
-        });
-
+        unsubMsg = onSnapshot(query(collection(db,'chats'), where('members','array-contains', u.uid)), s=>{ setMsgCount(s.size); });
       } finally { setLoading(false); }
     });
     return () => { unsub(); if(unsubReq) unsubReq(); if(unsubNotif) unsubNotif(); if(unsubMsg) unsubMsg(); }
   }, [router]);
 
   useEffect(() => {
-    const unsub = onSnapshot(query(collection(db, "posts"), orderBy("created_at", "desc")), (snap) => { setPosts(snap.docs.map(d => ({ id: d.id,...d.data() }))); });
+    // ✅ الحل النهائي للاختفاء: نرتب بـ createdAtMillis بدل created_at
+    const q = query(collection(db, "posts"), orderBy("createdAtMillis", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id,...d.data() }));
+      // لو في منشورات قديمة ما عندها createdAtMillis نرتبها بالـ created_at
+      data.sort((a:any,b:any)=>{
+        const am = a.createdAtMillis || a.created_at?.seconds*1000 || 0;
+        const bm = b.createdAtMillis || b.created_at?.seconds*1000 || 0;
+        return bm - am;
+      });
+      setPosts(data);
+    }, (err)=>{
+      // fallback لو الفهرس لسه ما اتعمل
+      const q2 = query(collection(db, "posts"), orderBy("created_at", "desc"));
+      onSnapshot(q2, (snap)=> setPosts(snap.docs.map(d => ({ id: d.id,...d.data() }))));
+    });
     return () => unsub();
   }, []);
 
@@ -81,7 +91,6 @@ export default function Page(){
       @media(max-width:1023px){.desktop-header{display:none!important}.mobile-header{display:flex!important} }
       `}</style>
 
-      {/* لابتوب */}
       <header className="desktop-header items-center justify-between px-6 py-3 bg-[#122025] border-b border-[#1A2E35] max-w-[1600px] mx-auto w-full" style={{display:'flex'}}>
         <div className="flex items-center gap-4">
           <Link href={`/profile/${currentUser?.uid}`} className="flex items-center gap-2"><img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=15`} className="w-10 h-10 rounded-full border-2 border-[#00E5FF]"/><span className="font-bold text-sm fb-font">{currentUser?.displayName}</span></Link>
@@ -95,7 +104,6 @@ export default function Page(){
         </div>
       </header>
 
-      {/* جوال */}
       <header className="mobile-header items-center justify-between px-3 py-3 bg-[#122025] border-b border-[#1A2E35]" style={{display:'flex'}}>
         <div className="flex items-center gap-2">
           <Link href={`/profile/${currentUser?.uid}`}><img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=15`} className="w-9 h-9 rounded-full border-2 border-[#00E5FF]"/></Link>
@@ -113,11 +121,9 @@ export default function Page(){
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 p-4 border-b lg:border border-[#1A2E35]"><Stories currentUser={currentUser} /></div>
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 mt-2 lg:mt-4 border-y lg:border border-[#1A2E35]"><CreatePost currentUser={currentUser} /></div>
           <div className="space-y-2">{posts.filter(p=>!hiddenPosts.includes(p.id)).map(post=>(<div key={post.id} className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] overflow-hidden"><PostCard post={post} currentUser={currentUser} onHide={()=>setHiddenPosts([...hiddenPosts, post.id])} onStartEdit={(p:any)=>{ setEditingPost(p); setEditingContent(p.content); }} isEditing={editingPost?.id===post.id} editingContent={editingContent} setEditingContent={setEditingContent} onSaveEdit={async()=>{ await updateDoc(doc(db,'posts',editingPost.id),{content:editingContent}); setEditingPost(null); }} onCancelEdit={()=>setEditingPost(null)} commentText={commentText} setCommentText={setCommentText} openComments={openComments} setOpenComments={setOpenComments} /></div>))}</div>
-
           <div className="lg:hidden p-4">
             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold fb-font"><LogOut className="w-5 h-5" /> تسجيل خروج</button>
           </div>
-
         </main>
         <aside className="hidden lg:block w-[320px] bg-[#122025] p-4 border-r border-[#1A2E35]"><button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold fb-font"><LogOut className="w-5 h-5" /> خروج</button></aside>
       </div>
