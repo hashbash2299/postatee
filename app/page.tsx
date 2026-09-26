@@ -5,7 +5,7 @@ import { collection, onSnapshot, doc, getDoc, updateDoc, setDoc, where, query } 
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, LogOut, Bell, MessageCircle, Video, Sparkles } from "lucide-react";
+import { Users, LogOut, Bell, MessageCircle, Video, Sparkles, X, Circle } from "lucide-react";
 import CreatePost from "../components/feed/CreatePost";
 import PostCard from "../components/feed/PostCard";
 import Stories from "../components/feed/Stories";
@@ -23,6 +23,8 @@ export default function Page(){
   const [reqCount, setReqCount] = useState(0);
   const [notifCount, setNotifCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [showMobileContacts, setShowMobileContacts] = useState(false);
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -69,6 +71,17 @@ export default function Page(){
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id,...d.data() }));
+      setAllUsers(data);
+    });
+    return () => unsub();
+  }, []);
+
+  const onlineUsers = allUsers.filter((u:any) => u.isOnline);
+  const offlineUsers = allUsers.filter((u:any) =>!u.isOnline);
+
   if (loading) return <div className="min-h-screen bg-[#0B1418] flex items-center justify-center text-cyan-400 fb-font">جاري التحميل...</div>;
 
   return (
@@ -98,17 +111,79 @@ export default function Page(){
           <Link href={`/profile/${currentUser?.uid}`}><img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=15`} className="w-9 h-9 rounded-full border-2 border-[#00E5FF] object-cover"/></Link>
           <Link href="/friends" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Users className="w-4 h-4"/>{reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
           <Link href="/messages" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-4 h-4"/>{msgCount>0 && <span className="absolute -top-1 -right-1 bg-[#00E5FF] text-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{msgCount}</span>}</Link>
-          <Link href="/notifications" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Bell className="w-4 h-4"/>{notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">{notifCount}</span>}</Link>
+          <button onClick={()=>setShowMobileContacts(true)} className="relative w-8 h-8 rounded-full bg-[#00E5FF]/20 border border-[#00E5FF]/30 flex items-center justify-center"><Circle className="w-4 h-4 text-[#00E5FF] fill-[#00E5FF]" />{onlineUsers.length>0 && <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{onlineUsers.length}</span>}</button>
           <button onClick={handleLogout} className="w-8 h-8 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center active:scale-90"><LogOut className="w-4 h-4 text-red-400"/></button>
         </div>
         <div className="flex items-center gap-2"><h1 className="font-black text-[18px] fb-font">Posta<span className="text-[#00E5FF]">tee</span></h1><div className="w-8 h-8 bg-[#00E5FF] rounded-lg flex items-center justify-center text-black font-black">P</div></div>
       </header>
 
+      {/* Drawer الجوال */}
+      {showMobileContacts && (
+        <div className="fixed inset-0 z-[999] lg:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={()=>setShowMobileContacts(false)}></div>
+          <div className="absolute right-0 top-0 h-full w-[85%] max-w-[340px] bg-[#122025] border-l border-[#1A2E35] p-4 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-lg fb-font">جهات الاتصال</h3>
+              <button onClick={()=>setShowMobileContacts(false)} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><X className="w-5 h-5"/></button>
+            </div>
+
+            <div className="mb-5">
+              <p className="text-xs font-bold text-green-400 mb-2 fb-font">● متصلون الآن ({onlineUsers.length})</p>
+              <div className="flex flex-col gap-1">
+                {onlineUsers.map((u:any)=>(
+                  <Link href={`/profile/${u.uid || u.id}`} key={u.id} onClick={()=>setShowMobileContacts(false)} className="flex items-center gap-3 p-2 rounded-xl bg-green-500/10 border border-green-500/20">
+                    <div className="relative"><img src={u.photoURL || `https://i.pravatar.cc/100?u=${u.id}`} className="w-10 h-10 rounded-full object-cover"/><div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-[#122025]"></div></div>
+                    <div><p className="text-sm font-bold fb-font">{u.displayName || u.email}</p><p className="text-[11px] text-green-400">متصل الآن</p></div>
+                  </Link>
+                ))}
+                {onlineUsers.length===0 && <p className="text-white/40 text-xs">لا يوجد متصلين</p>}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-white/60 mb-2 fb-font">○ غير متصلين / جدد ({offlineUsers.length})</p>
+              <div className="flex flex-col gap-1">
+                {offlineUsers.map((u:any)=>(
+                  <Link href={`/profile/${u.uid || u.id}`} key={u.id} onClick={()=>setShowMobileContacts(false)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/10">
+                    <div className="relative"><img src={u.photoURL || `https://i.pravatar.cc/100?u=${u.id}`} className="w-10 h-10 rounded-full object-cover grayscale"/><div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-gray-500 border-2 border-[#122025]"></div></div>
+                    <div><p className="text-sm font-bold fb-font">{u.displayName || u.email}</p><p className="text-[11px] text-white/50">سجل جديد</p></div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex max-w-[1600px] mx-auto">
-        <aside className="hidden lg:flex w-[300px] bg-[#122025] flex-col p-4 border-l border-[#1A2E35]"><h3 className="font-bold mb-3 fb-font">جهات الاتصال</h3></aside>
+        <aside className="hidden lg:flex w-[300px] bg-[#122025] flex-col p-4 border-l border-[#1A2E35] h-[calc(100vh-65px)] sticky top-0 overflow-y-auto">
+          <h3 className="font-bold mb-4 fb-font">جهات الاتصال ({allUsers.length})</h3>
+          <div className="mb-4">
+            <p className="text-[11px] font-bold text-green-400 mb-2">● متصلون ({onlineUsers.length})</p>
+            <div className="flex flex-col gap-1">
+              {onlineUsers.map((u:any) => (
+                <Link href={`/profile/${u.uid || u.id}`} key={u.id} className="flex items-center gap-3 p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-all border border-green-500/10">
+                  <div className="relative"><img src={u.photoURL || `https://i.pravatar.cc/100?u=${u.id}`} className="w-9 h-9 rounded-full object-cover" alt="" /><div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-[#122025]"></div></div>
+                  <div className="flex-1 min-w-0"><p className="text-sm font-bold fb-font truncate">{u.displayName || u.email}</p><p className="text-[11px] text-green-400 truncate">متصل الآن</p></div>
+                </Link>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-white/40 mb-2">○ البقية</p>
+            <div className="flex flex-col gap-1">
+              {offlineUsers.map((u:any) => (
+                <Link href={`/profile/${u.uid || u.id}`} key={u.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/10 transition-all">
+                  <div className="relative"><img src={u.photoURL || `https://i.pravatar.cc/100?u=${u.id}`} className="w-9 h-9 rounded-full object-cover" alt="" /><div className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#122025] bg-gray-500"></div></div>
+                  <div className="flex-1 min-w-0"><p className="text-sm font-bold fb-font truncate">{u.displayName || u.email}</p><p className="text-[11px] text-white/50 truncate">غير متصل</p></div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </aside>
+
         <main className="flex-1 max-w-[720px] mx-auto w-full pb-[80px] lg:pb-0 overflow-hidden">
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 p-4 border-b lg:border border-[#1A2E35] overflow-hidden"><Stories currentUser={currentUser} /></div>
-
           <div className="mx-4 mt-3">
             <Link href="/video-maker">
               <div className="bg-gradient-to-r from-[#FFD700] via-[#FFC700] to-[#FFB000] rounded-2xl p-[2px] cursor-pointer hover:scale-[1.01] transition-all">
@@ -125,11 +200,10 @@ export default function Page(){
               </div>
             </Link>
           </div>
-
           <div className="bg-[#122025] lg:rounded-2xl m-4 mt-3 border border-[#1A2E35]"><CreatePost currentUser={currentUser} /></div>
           <div className="space-y-2 px-0 lg:px-4">{posts.filter(p=>!hiddenPosts.includes(p.id)).map(post=>(<div key={post.id} className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] overflow-hidden"><PostCard post={post} currentUser={currentUser} onHide={()=>setHiddenPosts([...hiddenPosts, post.id])} onStartEdit={(p:any)=>{ setEditingPost(p); setEditingContent(p.content); }} isEditing={editingPost?.id===post.id} editingContent={editingContent} setEditingContent={setEditingContent} onSaveEdit={async()=>{ await updateDoc(doc(db,'posts',editingPost.id),{content:editingContent}); setEditingPost(null); }} onCancelEdit={()=>setEditingPost(null)} commentText={commentText} setCommentText={setCommentText} openComments={openComments} setOpenComments={setOpenComments} /></div>))}</div>
         </main>
-        <aside className="hidden lg:block w-[320px] bg-[#122025] p-4 border-r border-[#1A2E35]"><button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold fb-font"><LogOut className="w-5 h-5" /> خروج</button></aside>
+        <div className="hidden lg:block w-[20px]"></div>
       </div>
     </div>
   )
