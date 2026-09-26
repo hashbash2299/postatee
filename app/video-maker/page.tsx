@@ -10,11 +10,11 @@ export default function VideoMaker(){
   const [audioFile, setAudioFile] = useState<any>(null)
   const [audioUrl, setAudioUrl] = useState<any>(null)
   const [form, setForm] = useState({
-    groom: "معاوية",
-    bride: "نوافل",
-    day: "الجمعة 30 اكتوبر",
-    time: "دعوة غداء",
-    place: "صالة الدانة"
+    groom: "العريس",
+    bride: "العروس",
+    day: "التاريخ",
+    time: "الدعوة",
+    place: "المكان"
   })
   const [isGenerating, setIsGenerating] = useState(false)
   const [videoUrl, setVideoUrl] = useState<any>(null)
