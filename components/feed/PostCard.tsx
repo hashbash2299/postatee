@@ -44,7 +44,6 @@ function CommentsList({ postId }: any){
     const unsub = onSnapshot(q, s=> setComments(s.docs.map(d=>({id:d.id,...d.data()}))));
     return ()=>unsub();
   },[postId]);
-
   return (
     <div className="space-y-2 mt-3">
       {comments.map((c:any)=>{
@@ -63,7 +62,6 @@ function CommentsList({ postId }: any){
 }
 
 export default function PostCard({ post, currentUser, onHide, onStartEdit, isEditing, editingContent, setEditingContent, onSaveEdit, onCancelEdit, commentText, setCommentText, openComments, setOpenComments }: any){
-
   const [expanded, setExpanded] = useState(false);
 
   const createNotification = async (type:'like'|'comment', extraText:string = '') => {
@@ -85,34 +83,23 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
         created_at: serverTimestamp(),
         createdAt: serverTimestamp()
       });
-    } catch(e) {
-      console.log("notification error", e);
-    }
+    } catch(e) { console.log(e); }
   };
 
   const handleLike = async()=>{
     const ref = doc(db,'posts',post.id);
     const liked = post.likes?.includes(currentUser.uid);
-    if(liked){
-      await updateDoc(ref, { likes: arrayRemove(currentUser.uid), likesCount: increment(-1) });
-    } else {
-      await updateDoc(ref, { likes: arrayUnion(currentUser.uid), likesCount: increment(1) });
-      await createNotification('like');
-    }
+    if(liked){ await updateDoc(ref, { likes: arrayRemove(currentUser.uid), likesCount: increment(-1) }); }
+    else { await updateDoc(ref, { likes: arrayUnion(currentUser.uid), likesCount: increment(1) }); await createNotification('like'); }
   };
 
   const handleComment = async()=>{
     const txt = commentText[post.id];
     if(!txt?.trim()) return;
     await addDoc(collection(db,'posts',post.id,'comments'), {
-      text: txt,
-      created_at: serverTimestamp(),
-      uid: currentUser.uid,
-      authorId: currentUser.uid,
-      authorName: currentUser.displayName,
-      authorAvatar: currentUser.photoURL || currentUser.avatar,
-      authorRole: currentUser.role || "",
-      authorUsername: currentUser.username
+      text: txt, created_at: serverTimestamp(), uid: currentUser.uid, authorId: currentUser.uid,
+      authorName: currentUser.displayName, authorAvatar: currentUser.photoURL || currentUser.avatar,
+      authorRole: currentUser.role || "", authorUsername: currentUser.username
     });
     await updateDoc(doc(db,'posts',post.id), { commentsCount: increment(1) });
     await createNotification('comment', txt);
@@ -120,14 +107,22 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
   };
 
   const content = post.content || "";
-  const isLong = content.length > 180;
+  const isLong = content.length > 250;
   const isShortPost =!post.image &&!post.video && content.length < 85;
 
-  const contentClass = isShortPost
-  ? "text-[22px] md:text-[24px] leading-[28px] md:leading-[30px] font-medium"
-    : "text-[14px] md:text-[15px] leading-[19px] md:leading-[20px] font-normal text-white/90";
+  // ✅ خط فيسبوك العربي الأصلي 100%
+  const fbArabicFont = {
+    fontFamily: `"Segoe UI Historic", "Segoe UI", Helvetica, Arial, sans-serif`,
+    fontWeight: isShortPost? 500 : 400,
+    fontStyle: "normal",
+    WebkitFontSmoothing: "antialiased",
+  } as const;
 
-  const displayText =!isLong || expanded? content : content.slice(0, 180) + "...";
+  const contentClass = isShortPost
+   ? "text-[24px] leading-[28px] tracking-[-0.1px]"
+    : "text-[15px] leading-[20px] tracking-[0.1px]";
+
+  const displayText =!isLong || expanded? content : content.slice(0, 250);
 
   return (
     <div id={`post-${post.id}`} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
@@ -143,10 +138,17 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
         <div className="mt-3"><textarea value={editingContent} onChange={e=>setEditingContent(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none min-h-[80px]"/><div className="flex gap-2 mt-2"><button onClick={onSaveEdit} className="bg-violet-500 text-white px-4 py-1.5 rounded-full text-sm font-bold">حفظ</button><button onClick={onCancelEdit} className="bg-white/10 px-4 py-1.5 rounded-full text-sm">إلغاء</button></div></div>
       ) : (
         <div className="mt-3">
-          <p className={`whitespace-pre-wrap break-words ${contentClass}`}>{displayText}</p>
+          <p style={fbArabicFont} className={`whitespace-pre-wrap break-words text-[#E4E6EB] ${contentClass}`}>
+            {displayText}
+            {isLong &&!expanded && <span>... </span>}
+          </p>
           {isLong && (
-            <button onClick={()=>setExpanded(!expanded)} className="mt-1 text-[13px] font-bold text-white/60 hover:text-white">
-              {expanded? "عرض أقل" : "عرض المزيد"}
+            <button
+              style={fbArabicFont}
+              onClick={()=>setExpanded(!expanded)}
+              className="inline text-[15px] font-medium text-[#8A8D91] hover:text-[#B0B3B8] leading-[20px]"
+            >
+              {expanded? " عرض أقل" : "عرض المزيد"}
             </button>
           )}
         </div>
