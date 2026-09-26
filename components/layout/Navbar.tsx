@@ -50,18 +50,19 @@ export default function Navbar({ currentUser, setOpenComments }: any){
   const markAllRead = async () => { for(const n of notifications.filter(n=>!n.read)) await updateDoc(doc(db,"notifications",n.id),{read:true}); };
 
   return (
-    <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10 px-4 py-2.5 flex items-center justify-between">
-      <span className="font-black text-xl tracking-tight">Postatee</span>
-      <div className="flex items-center gap-3">
-        <button onClick={()=>router.push('/')} className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center"><Home className="w-5 h-5 text-violet-400"/></button>
+    <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10 px-3 md:px-4 py-2.5 flex items-center justify-between">
+      <span className="font-black text-lg md:text-xl tracking-tight shrink-0">Postatee</span>
+
+      <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
+        <button onClick={()=>router.push('/')} className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/5 flex items-center justify-center"><Home className="w-4 h-4 md:w-5 md:h-5 text-violet-400"/></button>
 
         <div className="relative" ref={notifRef}>
-          <button onClick={()=>setShowNotif(!showNotif)} className="relative w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-            <Bell className="w-5 h-5 text-white/70"/>
-            {unreadCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{unreadCount}</span>}
+          <button onClick={()=>setShowNotif(!showNotif)} className="relative w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+            <Bell className="w-4 h-4 md:w-5 md:h-5 text-white/70"/>
+            {unreadCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center">{unreadCount}</span>}
           </button>
           {showNotif && (
-            <div className="absolute left-0 mt-2 w-[340px] max-h-[420px] overflow-y-auto bg-[#0a1212] border border-white/10 rounded-2xl shadow-2xl z-50">
+            <div className="absolute left-0 md:left-auto md:right-0 mt-2 w-[92vw] md:w-[340px] max-h-[420px] overflow-y-auto bg-[#0a1212] border border-white/10 rounded-2xl shadow-2xl z-50">
               <div className="flex justify-between items-center p-3 border-b border-white/5 sticky top-0 bg-[#0a1212]">
                 <span className="font-bold text-sm">الإشعارات</span>
                 <div className="flex gap-2 items-center">
@@ -84,9 +85,14 @@ export default function Navbar({ currentUser, setOpenComments }: any){
           )}
         </div>
 
-        <button onClick={()=>router.push('/messages')} className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center"><MessageSquare className="w-5 h-5 text-white/60"/></button>
-        <img src={currentUser?.avatar} onClick={()=>router.push(`/profile/${currentUser?.uid}`)} className="w-8 h-8 rounded-full border border-violet-500/30 cursor-pointer"/>
-        <button onClick={async()=>{await signOut(auth); router.push('/login');}} className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center"><LogOut className="w-4 h-4"/></button>
+        <button onClick={()=>router.push('/messages')} className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/5 flex items-center justify-center"><MessageSquare className="w-4 h-4 md:w-5 md:h-5 text-white/60"/></button>
+
+        <img src={currentUser?.avatar} onClick={()=>router.push(`/profile/${currentUser?.uid}`)} className="w-8 h-8 md:w-8 md:h-8 rounded-full border border-violet-500/30 cursor-pointer"/>
+
+        {/* ✅ زر الخروج - ظاهر دائما جوال + لابتوب */}
+        <button onClick={async()=>{ if(confirm('متأكد تبي تطلع؟')) { await signOut(auth); router.push('/login'); } }} className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center active:scale-90">
+          <LogOut className="w-4 h-4 text-red-400"/>
+        </button>
       </div>
     </header>
   )
