@@ -16,7 +16,6 @@ const timeAgo = (post:any) => {
   else if(ts?.seconds) ms = ts.seconds*1000;
   else if(ts?.toDate) ms = ts.toDate().getTime();
   else if(ts instanceof Date) ms = ts.getTime();
-
   const s = Math.floor((Date.now() - ms)/1000);
   if(s < 60) return "الآن";
   if(s < 3600) return `${Math.floor(s/60)} د`;
@@ -33,7 +32,12 @@ function LiveAuthor({ uid, fallbackName, fallbackRole, fallbackAvatar, size="pos
   const isPost = size==="post";
   return (
     <>
-      <img src={avatar || `https://i.pravatar.cc/100?u=${uid}`} onClick={()=>router.push(`/profile/${uid}`)} className={`${isPost?'w-10 h-10':'w-7 h-7'} rounded-full border border-cyan-400/20 cursor-pointer object-cover`}/>
+      <img
+        src={avatar || `https://i.pravatar.cc/100?u=${uid}`}
+        onClick={()=>router.push(`/profile/${uid}`)}
+        className={`${isPost?'w-10 h-10':'w-7 h-7'} rounded-full border border-cyan-400/20 cursor-pointer`}
+        style={{objectFit:'cover', width: isPost? '40px':'28px', height: isPost? '40px':'28px', flexShrink:0}}
+      />
       <div className={isPost? "": "flex-1"}>
         <div className="flex items-center gap-1.5">
           <span className={`font-bold ${isPost?'text-sm':'text-[13px]'} cursor-pointer fb-font ${getNameColor(role)}`} onClick={()=>router.push(`/profile/${uid}`)}>{displayName}</span>
@@ -47,7 +51,6 @@ function LiveAuthor({ uid, fallbackName, fallbackRole, fallbackAvatar, size="pos
 function CommentsList({ postId }: any){
   const [comments, setComments] = useState<any[]>([]);
   useEffect(()=>{
-    // بدون orderBy عشان ما يطلب Index
     const unsub = onSnapshot(collection(db,'posts',postId,'comments'), s=> {
       const data = s.docs.map(d=>({id:d.id,...d.data()}));
       data.sort((a:any,b:any)=>{
@@ -116,16 +119,11 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
   const content = post.content || "";
   const isLong = content.length > 250;
   const isShortPost =!post.image &&!post.video && content.length < 100;
-
-  // ✅ صغرت الخط من 20px لـ 16px
-  const contentClass = isShortPost
-? "text-[16px] leading-[22px] font-medium"
-    : "text-[15px] leading-[21px] font-normal";
-
+  const contentClass = isShortPost? "text-[16px] leading-[22px] font-medium" : "text-[15px] leading-[21px] font-normal";
   const displayText =!isLong || expanded? content : content.slice(0, 250);
 
   return (
-    <div id={`post-${post.id}`} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+    <div id={`post-${post.id}`} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 overflow-hidden w-full max-w-full">
       <div className="flex justify-between">
         <div className="flex gap-3 items-center">
           <LiveAuthor uid={post.authorId||post.uid} fallbackName={post.authorName} fallbackRole={post.authorRole} fallbackAvatar={post.authorAvatar} size="post"/>
@@ -149,8 +147,16 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
         </div>
       )}
 
-      {post.image && <img src={post.image} className="mt-3 rounded-xl w-full object-cover max-h-[500px]"/>}
-      {post.video && <video src={post.video} controls className="mt-3 rounded-xl w-full bg-black"/>}
+      {post.image && (
+        <div style={{marginTop:'12px', width:'100%', maxWidth:'100%', overflow:'hidden', borderRadius:'12px', maxHeight:'500px', background:'#000'}}>
+          <img
+            src={post.image}
+            alt="post"
+            style={{width:'100%', height:'auto', maxHeight:'500px', objectFit:'cover', display:'block', borderRadius:'12px'}}
+          />
+        </div>
+      )}
+      {post.video && <video src={post.video} controls style={{marginTop:'12px', borderRadius:'12px', width:'100%', maxHeight:'500px', background:'#000'}}/>}
 
       <div className="flex justify-between mt-3 pt-3 border-t border-white/5">
         <button onClick={handleLike} className={`flex gap-1.5 text-[13px] items-center fb-font ${post.likes?.includes(currentUser?.uid)?'text-red-500':'text-white/50'}`}><Heart className={`w-[18px] h-[18px] ${post.likes?.includes(currentUser?.uid)?'fill-red-500':''}`}/> {post.likesCount||0}</button>
@@ -161,7 +167,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       {openComments[post.id] && (
         <div className="mt-3 border-t border-white/5 pt-3">
           <div className="flex gap-2">
-            <img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=12`} className="w-7 h-7 rounded-full"/>
+            <img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=12`} className="w-7 h-7 rounded-full" style={{objectFit:'cover'}}/>
             <div className="flex-1 flex gap-2">
               <input value={commentText[post.id]||""} onChange={e=>setCommentText((prev:any)=>({...prev,[post.id]:e.target.value}))} placeholder="اكتب تعليق..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-[13px] outline-none fb-font"/>
               <button onClick={handleComment} className="bg-violet-500 text-white rounded-full w-8 h-8 flex items-center justify-center"><Send className="w-4 h-4"/></button>
