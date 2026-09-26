@@ -1,10 +1,11 @@
 "use client"
 import { useState, useEffect, useRef } from "react";
-import { db, auth } from "../../lib/firebase";
+import { db, auth } from "../../../lib/firebase";
 import { doc, collection, getDocs, query, where, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, FileText, Images, LayoutGrid, MessageCircle, Send, Loader2 } from "lucide-react";
+import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, MessageCircle, Send, Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import { processImage } from "../../../lib/imageProcessor";
 
 const getNameColor = (role:string) => {
   if(role === "مؤسس") return "text-cyan-400";
@@ -77,94 +78,21 @@ export default function ProfileWall() {
     return ()=>{ unsubFriend(); unsubSent(); unsubReceived(); unsubCount(); unsubChat(); unsubMsgReq(); };
   }, [myUid, targetUid]);
 
-  const handleSend = async ()=>{
-    if(!myUid ||!targetUid) return;
-    await addDoc(collection(db,'friendRequests'), { from: myUid, to: targetUid, status:'pending', created_at: serverTimestamp() });
-    setFriendStatus('pending_sent');
-  };
-  const handleAccept = async ()=>{
-    if(!myUid ||!targetUid ||!requestId) return;
-    const friendDocId = [myUid, targetUid].sort().join('_');
-    await setDoc(doc(db,'friends', friendDocId), { users:[myUid, targetUid], created_at: serverTimestamp() });
-    await deleteDoc(doc(db,'friendRequests', requestId));
-    setFriendStatus('friends');
-  };
-  const handleCancel = async ()=>{
-    if(!requestId) return;
-    await deleteDoc(doc(db,'friendRequests', requestId));
-    setFriendStatus('none'); setRequestId(null);
-  };
-  const handleUnfriend = async ()=>{
-    if(!myUid ||!targetUid) return;
-    await deleteDoc(doc(db,'friends', [myUid, targetUid].sort().join('_')));
-    setFriendStatus('none');
-  };
+  const handleSend = async ()=>{ if(!myUid ||!targetUid) return; await addDoc(collection(db,'friendRequests'), { from: myUid, to: targetUid, status:'pending', created_at: serverTimestamp() }); setFriendStatus('pending_sent'); };
+  const handleAccept = async ()=>{ if(!myUid ||!targetUid ||!requestId) return; const friendDocId = [myUid, targetUid].sort().join('_'); await setDoc(doc(db,'friends', friendDocId), { users:[myUid, targetUid], created_at: serverTimestamp() }); await deleteDoc(doc(db,'friendRequests', requestId)); setFriendStatus('friends'); };
+  const handleCancel = async ()=>{ if(!requestId) return; await deleteDoc(doc(db,'friendRequests', requestId)); setFriendStatus('none'); setRequestId(null); };
+  const handleUnfriend = async ()=>{ if(!myUid ||!targetUid) return; await deleteDoc(doc(db,'friends', [myUid, targetUid].sort().join('_'))); setFriendStatus('none'); };
+  const handleMessageClick = async()=>{ if(!myUid ||!targetUid) return; const chatId = [myUid, targetUid].sort().join('_'); if(friendStatus==='friends' || chatExists){ const chatSnap = await getDoc(doc(db,'chats',chatId)); if(!chatSnap.exists()){ await setDoc(doc(db,'chats',chatId),{ members:[myUid, targetUid], membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } }, created_at: serverTimestamp(), updated_at: serverTimestamp(), lastMessage: "" }); } router.push(`/messages/${chatId}`); } else { setShowMsgInput(true); } };
+  const sendMessageRequest = async()=>{ if(!firstMessage.trim() ||!myUid ||!targetUid) return; await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName, fromAvatar: currentUserData?.avatar, toName: user?.displayName, firstMessage, status: 'pending', created_at: serverTimestamp() }); setFirstMessage(""); setShowMsgInput(false); setMsgRequestStatus('pending'); };
 
-  const handleMessageClick = async()=>{
-    if(!myUid ||!targetUid) return;
-    const chatId = [myUid, targetUid].sort().join('_');
-    if(friendStatus==='friends' || chatExists){
-      const chatSnap = await getDoc(doc(db,'chats',chatId));
-      if(!chatSnap.exists()){
-        await setDoc(doc(db,'chats',chatId),{
-          members:[myUid, targetUid],
-          membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } },
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-          lastMessage: ""
-        });
-      }
-      router.push(`/messages/${chatId}`);
-    } else {
-      setShowMsgInput(true);
-    }
-  };
-
-  const sendMessageRequest = async()=>{
-    if(!firstMessage.trim() ||!myUid ||!targetUid) return;
-    await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName, fromAvatar: currentUserData?.avatar, toName: user?.displayName, firstMessage, status: 'pending', created_at: serverTimestamp() });
-    setFirstMessage(""); setShowMsgInput(false); setMsgRequestStatus('pending');
-  };
-
-  // ✅ دالة معالجة موحدة وسريعة
+  // ✅ المصنع الموحد - شغال لابتوب + جوال
   const handleUpload = async (e:any, type:'avatar'|'cover') => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if(!file) return;
     try {
       setUploading(type);
-      const compressedBase64 = await new Promise<string>((resolve, reject) => {
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d')!;
-          let w = img.width, h = img.height;
-
-          if(type === 'avatar'){
-            // قص مربع من النص
-            const s = Math.min(w,h);
-            const sx = (w-s)/2, sy = (h-s)/2;
-            canvas.width = 300; canvas.height = 300;
-            ctx.drawImage(img, sx, sy, s, s, 0, 0, 300, 300);
-          } else {
-            // كفر عريض
-            const maxW = 900;
-            if(w > maxW){ h = (maxW/w)*h; w = maxW; }
-            canvas.width = w; canvas.height = h;
-            ctx.drawImage(img, 0, 0, w, h);
-          }
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-          URL.revokeObjectURL(img.src);
-          resolve(dataUrl);
-        };
-        img.onerror = () => reject(new Error('فشل تحميل الصورة'));
-      });
-
-      if(compressedBase64.length > 900000){
-        alert("الصورة كبيرة، جرب صورة تانية");
-        return;
-      }
-      await updateDoc(doc(db, 'users', targetUid), { [type]: compressedBase64 });
+      const compressed = await processImage(file, type);
+      await updateDoc(doc(db, 'users', targetUid), { [type]: compressed });
     } catch(err:any){
       alert("فشل: " + err.message);
     } finally {
@@ -190,9 +118,9 @@ export default function ProfileWall() {
         {uploading==='cover' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10"><Loader2 className="w-8 h-8 text-white animate-spin"/></div>}
 
         {isMine && (
-          <label className="absolute bottom-4 left-4 z-20 bg-black/60 p-2.5 rounded-full border border-white/20 cursor-pointer hover:bg-black/80 active:scale-90 transition">
+          <label className="absolute bottom-4 left-4 z-30 bg-black/60 p-3 rounded-full border border-white/20 cursor-pointer active:scale-90 flex items-center justify-center w-11 h-11">
             {uploading==='cover'? <Loader2 className="w-5 h-5 text-white animate-spin"/> : <Camera className="w-5 h-5 text-white"/>}
-            <input ref={coverInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'cover')}/>
+            <input ref={coverInput} type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={(e)=>handleUpload(e,'cover')} />
           </label>
         )}
 
@@ -203,9 +131,9 @@ export default function ProfileWall() {
               {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
             </div>
             {isMine && (
-              <label className="absolute -bottom-1 -left-1 z-20 bg-white p-1.5 rounded-full cursor-pointer hover:bg-zinc-200 active:scale-90 transition shadow-lg">
-                <Camera className="w-4 h-4 text-black"/>
-                <input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e)=>handleUpload(e,'avatar')}/>
+              <label className="absolute -bottom-1 -left-1 z-30 bg-white p-2 rounded-full cursor-pointer active:scale-90 shadow-lg flex items-center justify-center w-8 h-8">
+                <Camera className="w-4 h-4 text-black pointer-events-none"/>
+                <input ref={avatarInput} type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={(e)=>handleUpload(e,'avatar')} />
               </label>
             )}
           </div>
@@ -223,35 +151,19 @@ export default function ProfileWall() {
         <div className="max-w-[600px] mx-auto px-6 mt-[68px]">
           <div className="flex gap-2.5 flex-wrap">
             {friendStatus==='friends'? (
-              <>
-                <button onClick={handleUnfriend} className="h-9 px-5 rounded-full bg-white/[0.06] border border-white/10 text-white font-bold text-[12px] flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5"/> صديق</button>
-                <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-[#00E5FF] text-black font-black text-[12px] flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5"/> مراسلة</button>
-              </>
+              <><button onClick={handleUnfriend} className="h-9 px-5 rounded-full bg-white/[0.06] border border-white/10 text-white font-bold text-[12px] flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5"/> صديق</button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-[#00E5FF] text-black font-black text-[12px] flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5"/> مراسلة</button></>
             ) : friendStatus==='pending_sent'? (
-              <>
-                <button onClick={handleCancel} className="h-9 px-5 rounded-full bg-white/10 border border-white/15 text-white font-bold text-[12px] flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> تم الإرسال</button>
-                <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400/50 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> {msgRequestStatus==='pending'?'تم الطلب':'طلب مراسلة'}</button>
-              </>
+              <><button onClick={handleCancel} className="h-9 px-5 rounded-full bg-white/10 border border-white/15 text-white font-bold text-[12px] flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> تم الإرسال</button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400/50 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> {msgRequestStatus==='pending'?'تم الطلب':'طلب مراسلة'}</button></>
             ) : friendStatus==='pending_received'? (
-              <>
-                <button onClick={handleAccept} className="h-9 px-5 rounded-full bg-green-500 text-white font-black text-[12px] flex items-center gap-1.5"><Check className="w-3.5 h-3.5"/> قبول</button>
-                <button onClick={handleCancel} className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white"/></button>
-                <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400/50 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> طلب مراسلة</button>
-              </>
+              <><button onClick={handleAccept} className="h-9 px-5 rounded-full bg-green-500 text-white font-black text-[12px] flex items-center gap-1.5"><Check className="w-3.5 h-3.5"/> قبول</button><button onClick={handleCancel} className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white"/></button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400/50 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> طلب مراسلة</button></>
             ) : (
-              <>
-                <button onClick={handleSend} className="h-9 px-5 rounded-full bg-white text-black font-black text-[12px] flex items-center gap-1.5 hover:bg-zinc-100 transition"><UserPlus className="w-3.5 h-3.5"/> إضافة صديق</button>
-                <button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5 hover:bg-cyan-400/10 transition"><Send className="w-3.5 h-3.5"/> طلب مراسلة</button>
-              </>
+              <><button onClick={handleSend} className="h-9 px-5 rounded-full bg-white text-black font-black text-[12px] flex items-center gap-1.5"><UserPlus className="w-3.5 h-3.5"/> إضافة صديق</button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> طلب مراسلة</button></>
             )}
           </div>
         </div>
       )}
 
-      {showMsgInput && (
-        <div className="max-w-[600px] mx-auto mt-6 px-3"><div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2"><input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${user.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none text-white"/><button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button><button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4 text-white"/></button></div></div>
-      )}
-
+      {showMsgInput && (<div className="max-w-[600px] mx-auto mt-6 px-3"><div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2"><input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${user.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none text-white"/><button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button><button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4 text-white"/></button></div></div>)}
       <div className="max-w-[600px] mx-auto mt-8 px-3 pb-20">
         <div className="flex bg-white/[0.05] rounded-2xl p-1.5 gap-1.5 border border-white/10">
           <button onClick={()=>setTab('all')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='all'?'bg-[#00E5FF] text-black':'text-white/50'}`}>الكل</button>
