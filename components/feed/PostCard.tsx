@@ -51,9 +51,7 @@ function CommentsList({ postId }: any){
         return (
           <div key={c.id} className="flex gap-2 bg-white/[0.03] border border-white/5 p-2.5 rounded-xl">
             <LiveAuthor uid={uid} fallbackName={c.authorName} fallbackRole={c.authorRole} fallbackAvatar={c.authorAvatar} size="comment" />
-            <div className="flex-1">
-              <p className="text-[13px] text-white/80">{c.text}</p>
-            </div>
+            <div className="flex-1"><p className="text-[13px] text-white/80 whitespace-pre-wrap break-words fb-font">{c.text}</p></div>
           </div>
         )
       })}
@@ -69,19 +67,13 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
     if(!postOwnerId || postOwnerId === currentUser.uid) return;
     try {
       await addDoc(collection(db, 'notifications'), {
-        toUid: postOwnerId,
-        to: postOwnerId,
-        fromUid: currentUser.uid,
+        toUid: postOwnerId, to: postOwnerId, fromUid: currentUser.uid,
         fromName: currentUser.displayName || currentUser.username || 'مستخدم',
-        fromPhoto: currentUser.photoURL || currentUser.avatar || currentUser.photo || `https://i.pravatar.cc/100?u=${currentUser.uid}`,
-        fromAvatar: currentUser.photoURL || currentUser.avatar || currentUser.photo || `https://i.pravatar.cc/100?u=${currentUser.uid}`,
-        type: type,
-        postId: post.id,
-        postContent: post.content?.slice(0,50) || '',
+        fromPhoto: currentUser.photoURL || currentUser.avatar || `https://i.pravatar.cc/100?u=${currentUser.uid}`,
+        fromAvatar: currentUser.photoURL || currentUser.avatar || `https://i.pravatar.cc/100?u=${currentUser.uid}`,
+        type: type, postId: post.id, postContent: post.content?.slice(0,50) || '',
         text: type === 'like'? 'أعجب بمنشورك' : `علق على منشورك: ${extraText.slice(0,30)}`,
-        read: false,
-        created_at: serverTimestamp(),
-        createdAt: serverTimestamp()
+        read: false, created_at: serverTimestamp(), createdAt: serverTimestamp()
       });
     } catch(e) { console.log(e); }
   };
@@ -108,19 +100,11 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
 
   const content = post.content || "";
   const isLong = content.length > 250;
-  const isShortPost =!post.image &&!post.video && content.length < 85;
-
-  // ✅ خط فيسبوك العربي الأصلي 100%
-  const fbArabicFont = {
-    fontFamily: `"Segoe UI Historic", "Segoe UI", Helvetica, Arial, sans-serif`,
-    fontWeight: isShortPost? 500 : 400,
-    fontStyle: "normal",
-    WebkitFontSmoothing: "antialiased",
-  } as const;
+  const isShortPost =!post.image &&!post.video && content.length < 100;
 
   const contentClass = isShortPost
-   ? "text-[24px] leading-[28px] tracking-[-0.1px]"
-    : "text-[15px] leading-[20px] tracking-[0.1px]";
+ ? "text-[20px] leading-[26px] font-medium tracking-[0.1px]"
+    : "text-[16px] leading-[22px] font-normal tracking-[0.1px]";
 
   const displayText =!isLong || expanded? content : content.slice(0, 250);
 
@@ -129,26 +113,21 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       <div className="flex justify-between">
         <div className="flex gap-3 items-center">
           <LiveAuthor uid={post.authorId||post.uid} fallbackName={post.authorName} fallbackRole={post.authorRole} fallbackAvatar={post.authorAvatar} size="post"/>
-          <span className="text-[11px] text-white/30">{timeAgo(post.created_at)}</span>
+          <span className="text-[11px] text-white/30 fb-font">{timeAgo(post.created_at)}</span>
         </div>
         <PostMenu post={post} currentUser={currentUser} onHide={onHide} onEdit={onStartEdit}/>
       </div>
 
       {isEditing? (
-        <div className="mt-3"><textarea value={editingContent} onChange={e=>setEditingContent(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none min-h-[80px]"/><div className="flex gap-2 mt-2"><button onClick={onSaveEdit} className="bg-violet-500 text-white px-4 py-1.5 rounded-full text-sm font-bold">حفظ</button><button onClick={onCancelEdit} className="bg-white/10 px-4 py-1.5 rounded-full text-sm">إلغاء</button></div></div>
+        <div className="mt-3"><textarea value={editingContent} onChange={e=>setEditingContent(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[16px] outline-none min-h-[120px] max-h-[500px] resize-y fb-font"/><div className="flex gap-2 mt-2"><button onClick={onSaveEdit} className="bg-violet-500 text-white px-4 py-1.5 rounded-full text-sm font-bold fb-font">حفظ</button><button onClick={onCancelEdit} className="bg-white/10 px-4 py-1.5 rounded-full text-sm fb-font">إلغاء</button></div></div>
       ) : (
         <div className="mt-3">
-          <p style={fbArabicFont} className={`whitespace-pre-wrap break-words text-[#E4E6EB] ${contentClass}`}>
-            {displayText}
-            {isLong &&!expanded && <span>... </span>}
+          <p className={`whitespace-pre-wrap break-words text-[#E4E6EB] fb-font ${contentClass}`}>
+            {displayText}{isLong &&!expanded && "..."}
           </p>
           {isLong && (
-            <button
-              style={fbArabicFont}
-              onClick={()=>setExpanded(!expanded)}
-              className="inline text-[15px] font-medium text-[#8A8D91] hover:text-[#B0B3B8] leading-[20px]"
-            >
-              {expanded? " عرض أقل" : "عرض المزيد"}
+            <button onClick={()=>setExpanded(!expanded)} className="mt-1 text-[15px] font-bold text-[#8A8D91] hover:text-white fb-font">
+              {expanded? "عرض أقل" : "عرض المزيد"}
             </button>
           )}
         </div>
@@ -158,9 +137,9 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       {post.video && <video src={post.video} controls className="mt-3 rounded-xl w-full bg-black"/>}
 
       <div className="flex justify-between mt-3 pt-3 border-t border-white/5">
-        <button onClick={handleLike} className={`flex gap-1.5 text-[13px] items-center ${post.likes?.includes(currentUser?.uid)?'text-red-500':'text-white/50'}`}><Heart className={`w-[18px] h-[18px] ${post.likes?.includes(currentUser?.uid)?'fill-red-500':''}`}/> {post.likesCount||0}</button>
-        <button onClick={()=>setOpenComments((p:any)=>({...p,[post.id]:!p[post.id]}))} className="flex gap-1.5 text-[13px] text-white/50 items-center"><MessageCircle className="w-[18px] h-[18px]"/> {post.commentsCount||0}</button>
-        <button className="flex gap-1.5 text-[13px] text-white/50 items-center"><Share2 className="w-[18px] h-[18px]"/> مشاركة</button>
+        <button onClick={handleLike} className={`flex gap-1.5 text-[13px] items-center fb-font ${post.likes?.includes(currentUser?.uid)?'text-red-500':'text-white/50'}`}><Heart className={`w-[18px] h-[18px] ${post.likes?.includes(currentUser?.uid)?'fill-red-500':''}`}/> {post.likesCount||0}</button>
+        <button onClick={()=>setOpenComments((p:any)=>({...p,[post.id]:!p[post.id]}))} className="flex gap-1.5 text-[13px] text-white/50 items-center fb-font"><MessageCircle className="w-[18px] h-[18px]"/> {post.commentsCount||0}</button>
+        <button className="flex gap-1.5 text-[13px] text-white/50 items-center fb-font"><Share2 className="w-[18px] h-[18px]"/> مشاركة</button>
       </div>
 
       {openComments[post.id] && (
@@ -168,7 +147,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
           <div className="flex gap-2">
             <img src={currentUser?.photoURL || currentUser?.avatar || `https://i.pravatar.cc/100?img=12`} className="w-7 h-7 rounded-full"/>
             <div className="flex-1 flex gap-2">
-              <input value={commentText[post.id]||""} onChange={e=>setCommentText((prev:any)=>({...prev,[post.id]:e.target.value}))} placeholder="اكتب تعليق..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-[13px] outline-none"/>
+              <input value={commentText[post.id]||""} onChange={e=>setCommentText((prev:any)=>({...prev,[post.id]:e.target.value}))} placeholder="اكتب تعليق..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-[13px] outline-none fb-font"/>
               <button onClick={handleComment} className="bg-violet-500 text-white rounded-full w-8 h-8 flex items-center justify-center"><Send className="w-4 h-4"/></button>
             </div>
           </div>
