@@ -1,16 +1,23 @@
 "use client"
 import { useState, useEffect } from "react";
 import { db } from "@/app/lib/firebase";
-import { doc, updateDoc, arrayUnion, arrayRemove, increment, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot } from "firebase/firestore";
+import { doc, updateDoc, arrayUnion, arrayRemove, increment, collection, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { Heart, MessageCircle, Share2, Send } from "lucide-react";
 import { useLiveUser } from "@/lib/hooks/useLiveUser";
 import { RoleBadge, getNameColor } from "./RoleBadge";
 import PostMenu from "./PostMenu";
 import { useRouter } from "next/navigation";
 
-const timeAgo = (ts:any) => {
-  if(!ts?.seconds) return "الآن";
-  const s = Math.floor((Date.now() - ts.seconds*1000)/1000);
+const timeAgo = (post:any) => {
+  const ts = post.createdAtMillis || post.created_at;
+  if(!ts) return "الآن";
+  let ms = 0;
+  if(typeof ts === 'number') ms = ts;
+  else if(ts?.seconds) ms = ts.seconds*1000;
+  else if(ts?.toDate) ms = ts.toDate().getTime();
+  else if(ts instanceof Date) ms = ts.getTime();
+
+  const s = Math.floor((Date.now() - ms)/1000);
   if(s < 60) return "الآن";
   if(s < 3600) return `${Math.floor(s/60)} د`;
   if(s < 86400) return `${Math.floor(s/3600)} س`;
@@ -29,7 +36,7 @@ function LiveAuthor({ uid, fallbackName, fallbackRole, fallbackAvatar, size="pos
       <img src={avatar || `https://i.pravatar.cc/100?u=${uid}`} onClick={()=>router.push(`/profile/${uid}`)} className={`${isPost?'w-10 h-10':'w-7 h-7'} rounded-full border border-cyan-400/20 cursor-pointer object-cover`}/>
       <div className={isPost? "": "flex-1"}>
         <div className="flex items-center gap-1.5">
-          <span className={`font-bold ${isPost?'text-sm':'text-[13px]'} cursor-pointer ${getNameColor(role)}`} onClick={()=>router.push(`/profile/${uid}`)}>{displayName}</span>
+          <span className={`font-bold ${isPost?'text-sm':'text-[13px]'} cursor-pointer fb-font ${getNameColor(role)}`} onClick={()=>router.push(`/profile/${uid}`)}>{displayName}</span>
           <RoleBadge role={role}/>
         </div>
       </div>
@@ -40,8 +47,16 @@ function LiveAuthor({ uid, fallbackName, fallbackRole, fallbackAvatar, size="pos
 function CommentsList({ postId }: any){
   const [comments, setComments] = useState<any[]>([]);
   useEffect(()=>{
-    const q = query(collection(db,'posts',postId,'comments'), orderBy('created_at','asc'));
-    const unsub = onSnapshot(q, s=> setComments(s.docs.map(d=>({id:d.id,...d.data()}))));
+    // بدون orderBy عشان ما يطلب Index
+    const unsub = onSnapshot(collection(db,'posts',postId,'comments'), s=> {
+      const data = s.docs.map(d=>({id:d.id,...d.data()}));
+      data.sort((a:any,b:any)=>{
+        const at = a.createdAtMillis || a.created_at?.seconds*1000 || 0;
+        const bt = b.createdAtMillis || b.created_at?.seconds*1000 || 0;
+        return at - bt;
+      });
+      setComments(data);
+    });
     return ()=>unsub();
   },[postId]);
   return (
@@ -89,7 +104,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
     const txt = commentText[post.id];
     if(!txt?.trim()) return;
     await addDoc(collection(db,'posts',post.id,'comments'), {
-      text: txt, created_at: serverTimestamp(), uid: currentUser.uid, authorId: currentUser.uid,
+      text: txt, created_at: serverTimestamp(), createdAtMillis: Date.now(), uid: currentUser.uid, authorId: currentUser.uid,
       authorName: currentUser.displayName, authorAvatar: currentUser.photoURL || currentUser.avatar,
       authorRole: currentUser.role || "", authorUsername: currentUser.username
     });
@@ -102,9 +117,10 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
   const isLong = content.length > 250;
   const isShortPost =!post.image &&!post.video && content.length < 100;
 
+  // ✅ صغرت الخط من 20px لـ 16px
   const contentClass = isShortPost
- ? "text-[20px] leading-[26px] font-medium tracking-[0.1px]"
-    : "text-[16px] leading-[22px] font-normal tracking-[0.1px]";
+? "text-[16px] leading-[22px] font-medium"
+    : "text-[15px] leading-[21px] font-normal";
 
   const displayText =!isLong || expanded? content : content.slice(0, 250);
 
@@ -113,20 +129,20 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       <div className="flex justify-between">
         <div className="flex gap-3 items-center">
           <LiveAuthor uid={post.authorId||post.uid} fallbackName={post.authorName} fallbackRole={post.authorRole} fallbackAvatar={post.authorAvatar} size="post"/>
-          <span className="text-[11px] text-white/30 fb-font">{timeAgo(post.created_at)}</span>
+          <span className="text-[11px] text-white/30 fb-font">{timeAgo(post)}</span>
         </div>
         <PostMenu post={post} currentUser={currentUser} onHide={onHide} onEdit={onStartEdit}/>
       </div>
 
       {isEditing? (
-        <div className="mt-3"><textarea value={editingContent} onChange={e=>setEditingContent(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[16px] outline-none min-h-[120px] max-h-[500px] resize-y fb-font"/><div className="flex gap-2 mt-2"><button onClick={onSaveEdit} className="bg-violet-500 text-white px-4 py-1.5 rounded-full text-sm font-bold fb-font">حفظ</button><button onClick={onCancelEdit} className="bg-white/10 px-4 py-1.5 rounded-full text-sm fb-font">إلغاء</button></div></div>
+        <div className="mt-3"><textarea value={editingContent} onChange={e=>setEditingContent(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[15px] outline-none min-h-[120px] max-h-[500px] resize-y fb-font"/><div className="flex gap-2 mt-2"><button onClick={onSaveEdit} className="bg-violet-500 text-white px-4 py-1.5 rounded-full text-sm font-bold fb-font">حفظ</button><button onClick={onCancelEdit} className="bg-white/10 px-4 py-1.5 rounded-full text-sm fb-font">إلغاء</button></div></div>
       ) : (
         <div className="mt-3">
           <p className={`whitespace-pre-wrap break-words text-[#E4E6EB] fb-font ${contentClass}`}>
             {displayText}{isLong &&!expanded && "..."}
           </p>
           {isLong && (
-            <button onClick={()=>setExpanded(!expanded)} className="mt-1 text-[15px] font-bold text-[#8A8D91] hover:text-white fb-font">
+            <button onClick={()=>setExpanded(!expanded)} className="mt-1 text-[14px] font-bold text-[#8A8D91] hover:text-white fb-font">
               {expanded? "عرض أقل" : "عرض المزيد"}
             </button>
           )}
