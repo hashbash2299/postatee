@@ -25,12 +25,18 @@ export default function VideoMakerPage(){
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>)=>{
-    const list = e.target.files; if(!list) return;
-    Array.from(list).slice(0,5).forEach(file=>{
+    const files = e.target.files;
+    if(!files) return;
+    Array.from(files).slice(0,5).forEach(file=>{
       const r = new FileReader();
       r.onload = ev=> setImages(p=> [...p, ev.target?.result as string].slice(0,5));
       r.readAsDataURL(file);
     });
+  };
+
+  const handleMusicUpload = (e: React.ChangeEvent<HTMLInputElement>)=>{
+    const file = e.target.files?.[0];
+    if(file) setMusicFile(file);
   };
 
   const generate = async ()=>{
@@ -39,45 +45,37 @@ export default function VideoMakerPage(){
     const canvas = canvasRef.current!; const ctx = canvas.getContext('2d')!;
     canvas.width = 1080; canvas.height = 1920;
     const loaded = await Promise.all(images.map(s=> new Promise<HTMLImageElement>(r=>{ const im=new Image(); im.src=s; im.onload=()=>r(im);})));
-
-    // صوت
     let audioStream: MediaStream | null = null;
     if(musicFile && audioRef.current){
       const url = URL.createObjectURL(musicFile);
       audioRef.current.src = url;
       audioRef.current.loop = true;
       try{ await audioRef.current.play(); }catch{}
-      const aStream = (audioRef.current as any).captureStream?.() || (audioRef.current as any).mozCaptureStream?.();
+      const aStream = (audioRef.current as any).captureStream?.();
       if(aStream) audioStream = aStream;
     }
-
     const canvasStream = canvas.captureStream(30);
     const tracks = [...canvasStream.getVideoTracks()];
     if(audioStream) tracks.push(...audioStream.getAudioTracks());
     const finalStream = new MediaStream(tracks);
-
     const recorder = new MediaRecorder(finalStream, { mimeType: 'video/webm;codecs=vp9' });
     const chunks: Blob[] = [];
-    recorder.ondataavailable = e=> { if(e.data.size>0) chunks.push(e.data); };
+    recorder.ondataavailable = ev=> { if(ev.data.size>0) chunks.push(ev.data); };
     recorder.onstop = ()=>{
       const blob = new Blob(chunks, { type: 'video/webm' });
       setVideoUrl(URL.createObjectURL(blob));
       setIsGenerating(false);
-      if(audioRef.current){ audioRef.current.pause(); }
+      if(audioRef.current) audioRef.current.pause();
     };
-
     recorder.start(100);
     const DURATION = 15000; const start = Date.now();
-
     const draw = ()=>{
       const elapsed = Date.now()-start;
       const prog = Math.min(elapsed/DURATION,1);
       setProgress(Math.floor(prog*100));
       if(prog>=1){ recorder.stop(); return; }
-
       ctx.fillStyle = selectedTemplate.bg;
       ctx.fillRect(0,0,canvas.width,canvas.height);
-
       const idx = Math.floor(prog*loaded.length)%loaded.length;
       const img = loaded[idx];
       const scale = 1 + prog*0.2;
@@ -90,13 +88,6 @@ export default function VideoMakerPage(){
       ctx.clip();
       ctx.drawImage(img, (canvas.width-iw)/2, y-(ih-900)/2, iw, ih);
       ctx.restore();
-
-      // ظل خفيف
-      ctx.fillStyle = 'rgba(0,0,0,0.15)';
-      ctx.beginPath();
-      (ctx as any).roundRect(40,y,canvas.width-80,900,32);
-      ctx.fill();
-
       ctx.textAlign='center';
       ctx.fillStyle=selectedTemplate.textColor;
       ctx.font='bold 78px serif';
@@ -106,7 +97,6 @@ export default function VideoMakerPage(){
       ctx.font='500 38px sans-serif';
       ctx.fillStyle=selectedTemplate.textColor+'CC';
       ctx.fillText(dateText, 540, 1450, 980);
-
       requestAnimationFrame(draw);
     };
     draw();
@@ -122,10 +112,10 @@ export default function VideoMakerPage(){
           <div className="space-y-3">
             <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3"><input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full text-sm"/><div className="flex gap-2 mt-2 flex-wrap">{images.map((im,i)=><div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden"><img src={im} className="w-full h-full object-cover"/><button onClick={()=>setImages(p=>p.filter((_,k)=>k!==i))} className="absolute top-0 right-0 bg-red-500 rounded-full w-4 h-4 flex items-center justify-center"><X className="w-3 h-3"/></button></div>)}</div></div>
             <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 space-y-2"><input value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5"/><input value={subtitle} onChange={e=>setSubtitle(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5"/><input value={dateText} onChange={e=>setDateText(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5"/></div>
-            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3"><p className="text-sm font-bold mb-2 flex gap-2"><Music className="w-4 h-4"/> موسيقى MP3 من جهازك</p><input type="file" accept="audio/*" onChange={e=>{const f=e.target.files?.[0]; if(f) setMusicFile(f);}} className="w-full text-sm"/><audio ref={audioRef} hidden/>{musicFile && <p className="text-xs text-green-400 mt-1">{musicFile.name}</p>}</div>
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3"><p className="text-sm font-bold mb-2 flex gap-2"><Music className="w-4 h-4"/> موسيقى MP3 من جهازك</p><input type="file" accept="audio/*" onChange={handleMusicUpload} className="w-full text-sm"/><audio ref={audioRef} hidden/>{musicFile && <p className="text-xs text-green-400 mt-1">{musicFile.name}</p>}</div>
             <button onClick={generate} disabled={isGenerating} className="w-full bg-amber-400 text-black font-black py-3.5 rounded-2xl">{isGenerating? `بصنع الفيديو ${progress}%` : '▶ اصنع الفيديو 15 ثانية'}</button>
           </div>
-          <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 flex flex-col items-center"><canvas ref={canvasRef} width={1080} height={1920} className="w-[260px] h-[462px] bg-black rounded-2xl border border-white/10"/><div className="mt-3 w-full">{videoUrl && <><video src={videoUrl} controls className="w-full rounded-xl bg-black"/><a href={videoUrl} download={`postatee-${Date.now()}.webm`} className="mt-2 w-full bg-green-500 text-white font-bold py-3 rounded-xl flex justify-center gap-2"><Download/> تحميل الفيديو</a><p className="text-[10px] text-white/40 text-center mt-2">لو عايزو MP4 للايفون قول لي احولو ليك في السيرفر</p></>}</div></div>
+          <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 flex flex-col items-center"><canvas ref={canvasRef} width={1080} height={1920} className="w-[260px] h-[462px] bg-black rounded-2xl border border-white/10"/><div className="mt-3 w-full">{videoUrl && <><video src={videoUrl} controls className="w-full rounded-xl bg-black"/><a href={videoUrl} download={`postatee-${Date.now()}.webm`} className="mt-2 w-full bg-green-500 text-white font-bold py-3 rounded-xl flex justify-center gap-2"><Download/> تحميل الفيديو</a></>}</div></div>
         </div>
       </div>
     </div>
