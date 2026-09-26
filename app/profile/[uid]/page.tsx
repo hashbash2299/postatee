@@ -1,11 +1,11 @@
 "use client"
-import { useState, useEffect, useRef } from "react";
-import { db, auth } from "../../../lib/firebase";
+import { useState, useEffect } from "react";
+import { db, auth } from "@/lib/firebase";
 import { doc, collection, getDocs, query, where, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, MessageCircle, Send, Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { processImage } from "../../../lib/imageProcessor";
+import { processImage } from "@/lib/imageProcessor";
 
 const getNameColor = (role:string) => {
   if(role === "مؤسس") return "text-cyan-400";
@@ -39,8 +39,6 @@ export default function ProfileWall() {
   const [showMsgInput, setShowMsgInput] = useState(false);
   const [firstMessage, setFirstMessage] = useState("");
   const [uploading, setUploading] = useState<'avatar'|'cover'|null>(null);
-  const avatarInput = useRef<HTMLInputElement>(null);
-  const coverInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -85,9 +83,8 @@ export default function ProfileWall() {
   const handleMessageClick = async()=>{ if(!myUid ||!targetUid) return; const chatId = [myUid, targetUid].sort().join('_'); if(friendStatus==='friends' || chatExists){ const chatSnap = await getDoc(doc(db,'chats',chatId)); if(!chatSnap.exists()){ await setDoc(doc(db,'chats',chatId),{ members:[myUid, targetUid], membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } }, created_at: serverTimestamp(), updated_at: serverTimestamp(), lastMessage: "" }); } router.push(`/messages/${chatId}`); } else { setShowMsgInput(true); } };
   const sendMessageRequest = async()=>{ if(!firstMessage.trim() ||!myUid ||!targetUid) return; await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName, fromAvatar: currentUserData?.avatar, toName: user?.displayName, firstMessage, status: 'pending', created_at: serverTimestamp() }); setFirstMessage(""); setShowMsgInput(false); setMsgRequestStatus('pending'); };
 
-  // ✅ المصنع الموحد - شغال لابتوب + جوال
-  const handleUpload = async (e:any, type:'avatar'|'cover') => {
-    const file = e.target.files?.[0];
+  // ✅ حل الموبايل النهائي - انشاء input لحظيا
+  const handleUploadFile = async (file: File, type:'avatar'|'cover') => {
     if(!file) return;
     try {
       setUploading(type);
@@ -97,8 +94,18 @@ export default function ProfileWall() {
       alert("فشل: " + err.message);
     } finally {
       setUploading(null);
-      if(e.target) e.target.value = "";
     }
+  };
+
+  const pickImage = (type:'avatar'|'cover') => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e:any) => {
+      const file = e.target.files?.[0];
+      if(file) handleUploadFile(file, type);
+    };
+    input.click();
   };
 
   if (!user) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري تحميل الحائط...</div>;
@@ -115,26 +122,24 @@ export default function ProfileWall() {
 
       <div className="relative h-[200px] w-full bg-white/5">
         {user.cover? <img src={user.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
-        {uploading==='cover' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10"><Loader2 className="w-8 h-8 text-white animate-spin"/></div>}
+        {uploading==='cover' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20"><Loader2 className="w-8 h-8 text-white animate-spin"/></div>}
 
         {isMine && (
-          <label className="absolute bottom-4 left-4 z-30 bg-black/60 p-3 rounded-full border border-white/20 cursor-pointer active:scale-90 flex items-center justify-center w-11 h-11">
+          <button onClick={() => pickImage('cover')} className="absolute bottom-4 left-4 z-30 bg-black/70 p-3 rounded-full border border-white/30 active:scale-90 transition flex items-center justify-center w-11 h-11">
             {uploading==='cover'? <Loader2 className="w-5 h-5 text-white animate-spin"/> : <Camera className="w-5 h-5 text-white"/>}
-            <input ref={coverInput} type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={(e)=>handleUpload(e,'cover')} />
-          </label>
+          </button>
         )}
 
         <div className="absolute -bottom-12 right-6 flex items-end gap-4">
           <div className="relative">
             <div className="w-24 h-24 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden">
               {user.avatar? <img src={user.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}
-              {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
+              {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
             </div>
             {isMine && (
-              <label className="absolute -bottom-1 -left-1 z-30 bg-white p-2 rounded-full cursor-pointer active:scale-90 shadow-lg flex items-center justify-center w-8 h-8">
-                <Camera className="w-4 h-4 text-black pointer-events-none"/>
-                <input ref={avatarInput} type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={(e)=>handleUpload(e,'avatar')} />
-              </label>
+              <button onClick={() => pickImage('avatar')} className="absolute -bottom-1 -left-1 z-30 bg-white p-2 rounded-full active:scale-90 shadow-lg flex items-center justify-center w-8 h-8">
+                <Camera className="w-4 h-4 text-black"/>
+              </button>
             )}
           </div>
           <div className="pb-2">
