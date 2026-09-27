@@ -5,15 +5,15 @@ export default function DownloadPage() {
       <p className="text-gray-600 mb-8">آخر إصدار - آمن ومباشر من موقعنا الرسمي</p>
       
       <a 
-        href="/downloads/postatee.apk"
+        href="/downloads/Postatee.apk"
         download
         className="bg-black text-white px-8 py-4 rounded-full text-lg font-bold hover:bg-gray-800 transition"
       >
-        ⬇️ تحميل الآن - postatee.apk
+        ⬇️ تحميل الآن - Postatee.apk
       </a>
 
       <p className="mt-6 text-sm text-gray-500">
-        الرابط المباشر: postatee.com/downloads/postatee.apk
+        الرابط المباشر: Postatee.com/downloads/Postatee.apk
       </p>
     </div>
   )
