@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState, useRef } from "react"
 import { db, auth } from "@/lib/firebase"
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, setDoc, updateDoc, writeBatch } from "firebase/firestore"
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, setDoc, updateDoc, writeBatch, increment } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Send, User, Smile, CheckCheck, Crown, Star, ExternalLink } from "lucide-react"
@@ -54,17 +54,23 @@ export default function MessageRoom(){
       const chatRef = doc(db,'chats',finalChatId)
       const chatSnap = await getDoc(chatRef)
       if(!chatSnap.exists() && otherId){
-        await setDoc(chatRef,{ members:[u.uid, otherId], created_at:serverTimestamp(), updated_at:serverTimestamp(), lastMessage:"" })
+        await setDoc(chatRef,{ members:[u.uid, otherId], created_at:serverTimestamp(), updated_at:serverTimestamp(), lastMessage:"", unreadCounts:{} })
       }
       const q = query(collection(db,'chats',finalChatId,'messages'), orderBy('created_at','asc'))
       const unsubMsg = onSnapshot(q, async (snap: any)=>{
         setMessages(snap.docs.map((d: any)=>({id:d.id,...d.data()})) as any[])
         setTimeout(()=> bottomRef.current?.scrollIntoView({behavior:'smooth'}), 80)
+
+        // ✅ تصفير الرسائل الغير مقروءة + تصفير العداد في الـ parent
         const unread = snap.docs.filter((d: any)=> d.data().to===u.uid &&!d.data().read)
         if(unread.length>0){
           const batch = writeBatch(db)
           unread.forEach((d: any)=> batch.update(d.ref,{read:true}))
           await batch.commit()
+          await updateDoc(doc(db,'chats',finalChatId), {
+            [`unreadCounts.${u.uid}`]: 0,
+            lastRead: true
+          }).catch(()=>{})
         }
       })
       return ()=> unsubMsg()
@@ -78,8 +84,15 @@ export default function MessageRoom(){
     setText("")
     setShowEmoji(false)
     await addDoc(collection(db,'chats',chatId,'messages'),{ from:myUid, to:friendId, text:msg, read:false, reaction:null, created_at:serverTimestamp() })
-    await updateDoc(doc(db,'chats',chatId),{ lastMessage:msg, updated_at:serverTimestamp(), lastAt:serverTimestamp() })
+    await updateDoc(doc(db,'chats',chatId),{
+      lastMessage:msg,
+      updated_at:serverTimestamp(),
+      lastAt:serverTimestamp(),
+      lastSenderId: myUid,
+      [`unreadCounts.${friendId}`]: increment(1)
+    })
   }
+
   const addReaction = async (msgId:string, emoji:string)=>{
     await updateDoc(doc(db,'chats',chatId,'messages',msgId),{ reaction:emoji })
     setActiveReactId(null)
@@ -92,7 +105,7 @@ export default function MessageRoom(){
           <div className="flex items-center gap-2"><Crown className="w-5 h-5 text-yellow-400"/><h3 className="font-bold text-white text-[15px]">الشركاء الذهبيون</h3><span className="mr-auto bg-yellow-400/20 text-yellow-400 text-[10px] px-2 py-1 rounded-full font-bold">ممول</span></div>
         </div>
         <div className="p-3 space-y-4">
-          {ads.length===0 && <p className="text-white/20 text-[12px] text-center py-10">لا توجد اعلانات حاليا - اضف من لوحة الادمن</p>}
+          {ads.length===0 && <p className="text-white/20 text-[12px] text-center py-10">لا توجد اعلانات حاليا</p>}
           {ads.map((ad: any,i: number)=>(
             <a key={ad.id} href={ad.link||'#'} target="_blank" className={`relative rounded-[18px] overflow-hidden group cursor-pointer border block ${i===0?'h-[280px] border-yellow-400/20':'h-[160px] border-white/10'}`}>
               <img src={ad.img} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
@@ -104,14 +117,13 @@ export default function MessageRoom(){
                 <p className="text-white/70 text-[12px] mt-1">{ad.title}</p>
                 {i===0 && <span className="mt-3 w-full bg-white text-black rounded-full py-2 text-[13px] font-bold flex items-center justify-center gap-1">زور المتجر <ExternalLink className="w-4 h-4"/></span>}
               </div>
-              <div className="absolute top-0 -left-full h-full w-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
             </a>
           ))}
         </div>
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-[56px] bg-[#122025] border-b border-white/10 flex items-center gap-3 px-4 shrink-0">
+        <header className="h-[56px] bg-[#122025] border-b border-white/10 flex items-center gap-3 px-4 shrink-0 sticky top-0 z-20">
           <button onClick={()=>router.push('/messages')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><ArrowLeft className="w-5 h-5 text-white"/></button>
           {friendData?.avatar? <img src={friendData.avatar} className="w-8 h-8 rounded-full object-cover"/> : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><User className="w-4 h-4 text-white"/></div>}
           <div className="flex flex-col"><span className="font-bold text-white text-[14px]">{friendData?.displayName || 'محادثة'}</span><span className="text-[11px] text-white/40">متصل الآن</span></div>
