@@ -5,6 +5,7 @@ import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from "f
 import { Bell, Home, MessageSquare, LogOut, X } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import TickerBar from "./TickerBar";
 
 const timeAgo = (ts:any) => {
   if(!ts?.seconds) return "الآن";
@@ -14,22 +15,6 @@ const timeAgo = (ts:any) => {
   if(s < 86400) return `${Math.floor(s/3600)} س`;
   return `${Math.floor(s/86400)} ي`;
 };
-
-function TickerBar(){
-  return (
-    <div className="fixed top-0 left-0 right-0 z-[110] w-full bg-[#00E5FF] text-black text-[12px] font-bold h-[28px] flex items-center overflow-hidden whitespace-nowrap">
-      <div className="animate-marquee flex gap-10">
-        <span>👋 مرحباً بكم في Postatee - منصة سودانية لكل السودانيين حول العالم - معاً نبني سودان أفضل 🇸🇩</span>
-        <span>👋 مرحباً بكم في Postatee - منصة سودانية لكل السودانيين حول العالم - معاً نبني سودان أفضل 🇸🇩</span>
-        <span>👋 مرحباً بكم في Postatee - منصة سودانية لكل السودانيين حول العالم - معاً نبني سودان أفضل 🇸🇩</span>
-      </div>
-      <style>{`
-        @keyframes marquee { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-      .animate-marquee { animation: marquee 25s linear infinite; }
-      `}</style>
-    </div>
-  )
-}
 
 export default function Navbar({ currentUser, setOpenComments }: any){
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -104,8 +89,7 @@ export default function Navbar({ currentUser, setOpenComments }: any){
   return (
     <>
       <TickerBar />
-      {/* المسافة الكلية = التيكر 28px + النافبار 56px */}
-      <div className="h-[84px] md:h-[88px]" />
+      <div className="h-[56px] md:h-[60px]" />
       <header className="fixed top-[28px] left-0 right-0 z-[90] bg-black/95 backdrop-blur-xl border-b border-white/10 px-3 md:px-4 py-2.5 flex items-center justify-between">
         <span className="font-black text-lg md:text-xl tracking-tight shrink-0 cursor-pointer" onClick={()=>router.push('/')}>Postatee</span>
         <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
@@ -116,9 +100,10 @@ export default function Navbar({ currentUser, setOpenComments }: any){
               <Bell className="w-4 h-4 md:w-5 md:h-5 text-white/70"/>
               {unreadNotif>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{unreadNotif>9?'9+':unreadNotif}</span>}
             </button>
+
             {showNotif && (
-              <div className="absolute left-0 md:left-auto md:right-0 mt-3 w-[92vw] md:w-[360px] max-h-[420px] overflow-y-auto bg-[#0a1212] border border-white/10 rounded-2xl shadow-2xl z-[100]">
-                <div className="flex justify-between items-center p-3 border-b border-white/5 sticky top-0 bg-[#0a1212] z-10">
+              <div className="fixed top-[92px] left-2 right-2 md:left-auto md:right-4 md:w-[380px] max-h-[70vh] overflow-y-auto bg-[#0a1212] border border-white/10 rounded-2xl shadow-2xl z-[200]">
+                <div className="flex justify-between items-center p-3 border-b border-white/5 sticky top-0 bg-[#0a1212] z-10 rounded-t-2xl">
                   <span className="font-bold text-sm">الإشعارات</span>
                   <div className="flex gap-2 items-center">
                     {unreadNotif>0 && <button onClick={markAllRead} className="text-[11px] text-violet-400 hover:text-violet-300">تعليم كمقروءة</button>}
@@ -133,7 +118,7 @@ export default function Navbar({ currentUser, setOpenComments }: any){
                       <p className="text-[13px] leading-4"><span className="font-bold">{n.fromName}</span> {n.type==='like'? 'أعجب بمنشورك':'علق على منشورك'}</p>
                       <p className="text-[11px] text-white/30 mt-1">{timeAgo(n.created_at)}</p>
                     </div>
-                    {!n.read && <div className="w-2 h-2 bg-violet-500 rounded-full mt-2"/>}
+                    {!n.read && <div className="w-2 h-2 bg-violet-500 rounded-full mt-2 shrink-0"/>}
                   </div>
                 ))}
               </div>
