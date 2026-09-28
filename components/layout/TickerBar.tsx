@@ -2,7 +2,7 @@
 export default function TickerBar(){
   return (
     <div className="w-full bg-[#00E5FF] text-black text-[12px] font-bold h-[28px] flex items-center overflow-hidden">
-      <div className="animate-marquee whitespace-nowrap flex gap-10">
+      <div className="animate-marquee whitespace-nowrap flex gap-5">
         <span>👋 مرحباً بكم في Postatee - منصة سودانية لكل السودانيين حول العالم - معاً نبني سودان أفضل 🇸🇩</span>
         <span>👋 مرحباً بكم في Postatee - منصة سودانية لكل السودانيين حول العالم - معاً نبني سودان أفضل 🇸🇩</span>
         <span>👋 مرحباً بكم في Postatee - منصة سودانية لكل السودانيين حول العالم - معاً نبني سودان أفضل 🇸🇩</span>
@@ -14,7 +14,7 @@ export default function TickerBar(){
           100% { transform: translateX(100%); }
         }
        .animate-marquee {
-          animation: marquee 50s linear infinite;
+          animation: marquee 70s linear infinite;
         }
       `}</style>
     </div>
