@@ -1,3 +1,5 @@
+
+
 "use client"
 export default function TickerBar(){
   return (
@@ -11,7 +13,7 @@ export default function TickerBar(){
       <style>{`
         @keyframes marquee {
           0% { transform: translateX(-100%); }
-          50% { transform: translateX(100%); }
+          100% { transform: translateX(0%); }
         }
        .animate-marquee {
           animation: marquee 70s linear infinite;
@@ -19,4 +21,4 @@ export default function TickerBar(){
       `}</style>
     </div>
   )
-  }
+}
