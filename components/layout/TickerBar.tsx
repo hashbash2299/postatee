@@ -20,7 +20,7 @@ export default function TickerBar(){
       </div>
       <style>{`
         @keyframes marquee {
-          0% { transform: translateX(50%); }
+          0% { transform: translateX(-50%); }
           50% { transform: translateX(50%); }
         }
       .animate-marquee {
