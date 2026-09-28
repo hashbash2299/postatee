@@ -1,11 +1,11 @@
 "use client"
 import { useState, useRef } from "react";
-import { db, auth, storage } from "../../app/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
 import { collection, addDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Image as ImageIcon, Video, Send, X, Smile, Loader2 } from "lucide-react";
 import { feelingsList } from "./feelings";
-import { processImage } from "../../lib/imageProcessor";
+import { processImage } from "@/lib/imageProcessor";
 
 export default function CreatePost({ currentUser }: { currentUser:any }){
   const [text, setText] = useState("");
