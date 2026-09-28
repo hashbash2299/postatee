@@ -68,7 +68,7 @@ export default function CreatePost({ currentUser }: { currentUser:any }){
       <div className="flex gap-3">
         <img src={currentUser?.avatar} className="w-10 h-10 rounded-full shrink-0"/>
         <div className="w-full">
-          <textarea value={text} onChange={e=>setText(e.target.value)} placeholder={feeling? `ما شعورك وأنت ${feeling.label}?` : "بماذا تفكر؟"} className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-[15px] outline-none resize-none min-h-[44px] fb-font text-white"/>
+          <textarea value={text} onChange={e=>setText(e.target.value)} placeholder={feeling? `ما شعورك وأنت ${feeling.label}?` : "أحكي حكايتك ..."} className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-[15px] outline-none resize-none min-h-[44px] fb-font text-white"/>
           {feeling && <div className="mt-2 flex items-center gap-2 text-[13px] bg-violet-500/10 border border-violet-500/20 rounded-full px-3 py-1 w-fit"><span className="text-[16px]">{feeling.icon}</span><span className="text-white/80">يشعر بـ {feeling.label}</span><button onClick={()=>setFeeling(null)}><X className="w-3 h-3 text-white/50"/></button></div>}
         </div>
       </div>
