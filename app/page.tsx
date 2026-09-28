@@ -61,7 +61,7 @@ export default function Page(){
   const onlineUsers = allUsers.filter((u:any) => u.isOnline);
   const offlineUsers = allUsers.filter((u:any) =>!u.isOnline);
 
-  if (loading) return <div className="min-h-screen bg-[#0B1418] flex items-center justify-center text-cyan-400">جاري التحميل...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0B1418] flex items-center justify-center text-cyan-400">أهلا بيك في  بوستاتك</div>;
 
   return (
     <div className="min-h-screen bg-[#0B1418] text-white overflow-x-hidden" dir="rtl">
@@ -114,6 +114,22 @@ export default function Page(){
               </div>
             </Link>
           </div>
+
+import Link from "next/link"
+//...
+<Link href="/chat-rooms">
+  <div className="mt-3 bg-[#122025] border border-[#1E3A42] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E676] transition-colors">
+    <div className="flex items-center gap-3">
+      <div className="w-11 h-11 bg-[#00E676]/20 rounded-xl flex items-center justify-center text-xl">💬</div>
+      <div>
+        <h3 className="font-black text-[15px]">غرف دردشة سودانية</h3>
+        <p className="text-[11px] text-white/50">بنات • الجزيرة • دارفور • كردفان</p>
+      </div>
+    </div>
+    <div className="bg-[#00E676] text-black text-[12px] font-black px-4 py-2 rounded-full">ادخل</div>
+  </div>
+</Link>
+
 
           {/* كرييت بوست - ثابت زي فيسبوك */}
           <div className="sticky top-[88px] z-[20] bg-[#0B1418]/80 backdrop-blur-xl px-0 lg:px-4 py-2 mt-3">
