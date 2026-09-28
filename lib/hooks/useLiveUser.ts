@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { db } from "../../app/lib/firebase";
+import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 
 export function useLiveUser(uid: string) {
