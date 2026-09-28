@@ -29,7 +29,7 @@ export default function Page(){
         const userRef = doc(db, 'users', u.uid);
         let snap = await getDoc(userRef);
         if (!snap.exists()) {
-          await setDoc(userRef, { uid: u.uid, email: u.email, displayName: u.displayName || 'محمد أحمد', username: 'mohammed_' + u.uid.slice(0,5), role: 'مالك', profileCompleted: true, followers: 0, following: 0, photoURL: u.photoURL || null, createdAt: new Date() }, { merge: true });
+          await setDoc(userRef, { uid: u.uid, email: u.email, displayName: u.displayName || 'Postatee', username: 'user_'+u.uid.slice(0,5), role: 'عضو', profileCompleted: true, followers: 0, following: 0, photoURL: u.photoURL || null, createdAt: new Date() }, { merge: true });
           snap = await getDoc(userRef);
         }
         setCurrentUser({...snap.data(), uid: u.uid });
@@ -66,7 +66,7 @@ export default function Page(){
   return (
     <div className="min-h-screen bg-[#0B1418] text-white overflow-x-hidden" dir="rtl">
       <div className="flex max-w-[1600px] mx-auto">
-        {/* سايدبار - ثابت زي فيسبوك */}
+        {/* سايدبار ثابت */}
         <aside className="hidden lg:flex w-[300px] bg-[#122025] flex-col p-4 border-l border-[#1A2E35] h-[calc(100vh-88px)] sticky top-[88px] overflow-y-auto">
           <h3 className="font-bold mb-4">جهات الاتصال ({allUsers.length})</h3>
           <div className="mb-4">
@@ -93,8 +93,9 @@ export default function Page(){
           </div>
         </aside>
 
-        {/* الفيد - بيسكرول */}
+        {/* الفيد */}
         <main className="flex-1 max-w-[720px] mx-auto w-full pb-[80px] lg:pb-4">
+          {/* ستوريز بتسکرول عادي */}
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 p-4 border-b lg:border border-[#1A2E35] overflow-hidden"><Stories currentUser={currentUser} /></div>
 
           <div className="mx-4 mt-3">
@@ -114,9 +115,15 @@ export default function Page(){
             </Link>
           </div>
 
-          <div className="bg-[#122025] lg:rounded-2xl m-4 mt-3 border border-[#1A2E35]"><CreatePost currentUser={currentUser} /></div>
+          {/* كرييت بوست - ثابت زي فيسبوك */}
+          <div className="sticky top-[88px] z-[20] bg-[#0B1418]/80 backdrop-blur-xl px-0 lg:px-4 py-2 mt-3">
+            <div className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+              <CreatePost currentUser={currentUser} />
+            </div>
+          </div>
 
-          <div className="space-y-2 px-0 lg:px-4">
+          {/* البوستات - بتطلع تحت الكرييت بوست */}
+          <div className="space-y-2 px-0 lg:px-4 mt-3">
             {posts.filter(p=>!hiddenPosts.includes(p.id)).map(post=>(
               <div key={post.id} id={`post-${post.id}`} className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] overflow-hidden">
                 <PostCard
