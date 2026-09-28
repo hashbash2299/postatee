@@ -115,8 +115,7 @@ export default function Page(){
             </Link>
           </div>
 
-import Link from "next/link"
-//...
+
 <Link href="/chat-rooms">
   <div className="mt-3 bg-[#122025] border border-[#1E3A42] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E676] transition-colors">
     <div className="flex items-center gap-3">
