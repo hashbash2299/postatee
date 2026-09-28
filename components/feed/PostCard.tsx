@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react";
-import { db } from "@/app/lib/firebase";
+import { db } from " @/lib/firebase";
 import { doc, updateDoc, arrayUnion, arrayRemove, increment, collection, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { Heart, MessageCircle, Share2, Send } from "lucide-react";
 import { useLiveUser } from "@/lib/hooks/useLiveUser";

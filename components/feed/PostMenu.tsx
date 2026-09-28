@@ -1,5 +1,5 @@
 "use client"
-import { db } from "@/app/lib/firebase";
+import { db } from " @/lib/firebase";
 import { doc, deleteDoc } from "firebase/firestore";
 import { Trash2, Edit3, EyeOff, Copy, Flag, MoreHorizontal, X, AlertTriangle } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
