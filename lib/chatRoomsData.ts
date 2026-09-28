@@ -1,4 +1,14 @@
 export const sudaneseRooms = [
+  { 
+    id: "al7osh-alkabeer", 
+    name: "الحوش الكبير", 
+    icon: "🏠", 
+    desc: "بيت السودان الكبير - يلم الجميع", 
+    color: "from-[#FFD700] to-[#FF9800]", 
+    bg: "bg-[#FFD700]/20", 
+    online: 1250,
+    isBig: true 
+  },
   { id: "girls", name: "مجلس البنات", icon: "👩🏽‍🦱", desc: "خاص للبنات فقط", color: "from-pink-500 to-rose-500", bg: "bg-pink-500/20", online: 342 },
   { id: "shabab", name: "ديوان الشباب", icon: "☕", desc: "ونسة وضحك", color: "from-cyan-400 to-blue-500", bg: "bg-cyan-500/20", online: 512 },
   { id: "sharg", name: "أهل الشرق", icon: "🏔️", desc: "كسلا - بورتسودان", color: "from-orange-400 to-red-500", bg: "bg-orange-500/20", online: 89 },
