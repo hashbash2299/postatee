@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from "react";
-import { db, auth } from "@/app/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { Bell, Home, MessageSquare, LogOut, X } from "lucide-react";
 import { signOut } from "firebase/auth";
@@ -88,52 +88,56 @@ export default function Navbar({ currentUser, setOpenComments }: any){
 
   return (
     <>
-      <TickerBar />
-      <div className="h-[56px] md:h-[60px]" />
-      <header className="fixed top-[28px] left-0 right-0 z-[90] bg-black/95 backdrop-blur-xl border-b border-white/10 px-3 md:px-4 py-2.5 flex items-center justify-between">
-        <span className="font-black text-lg md:text-xl tracking-tight shrink-0 cursor-pointer" onClick={()=>router.push('/')}>Postatee</span>
-        <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
-          <button onClick={()=>router.push('/')} className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10"><Home className="w-4 h-4 md:w-5 md:h-5 text-violet-400"/></button>
+      {/* الحاوية الثابتة الكاملة - فيها التكر والهيدر */}
+      <div className="fixed top-0 left-0 right-0 z-[90] w-full">
+        <TickerBar />
+        <header className="bg-black/95 backdrop-blur-xl border-b border-white/10 px-3 md:px-4 py-2.5 flex items-center justify-between">
+          <span className="font-black text-lg md:text-xl tracking-tight shrink-0 cursor-pointer" onClick={()=>router.push('/')}>Postatee</span>
+          <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
+            <button onClick={()=>router.push('/')} className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10"><Home className="w-4 h-4 md:w-5 md:h-5 text-violet-400"/></button>
 
-          <div className="relative" ref={notifRef}>
-            <button onClick={()=>setShowNotif(!showNotif)} className="relative w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10">
-              <Bell className="w-4 h-4 md:w-5 md:h-5 text-white/70"/>
-              {unreadNotif>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{unreadNotif>9?'9+':unreadNotif}</span>}
+            <div className="relative" ref={notifRef}>
+              <button onClick={()=>setShowNotif(!showNotif)} className="relative w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10">
+                <Bell className="w-4 h-4 md:w-5 md:h-5 text-white/70"/>
+                {unreadNotif>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{unreadNotif>9?'9+':unreadNotif}</span>}
+              </button>
+
+              {showNotif && (
+                <div className="fixed top-[88px] left-2 right-2 md:left-auto md:right-4 md:w-[380px] max-h-[70vh] overflow-y-auto bg-[#0a1212] border border-white/10 rounded-2xl shadow-2xl z-[200]">
+                  <div className="flex justify-between items-center p-3 border-b border-white/5 sticky top-0 bg-[#0a1212] z-10 rounded-t-2xl">
+                    <span className="font-bold text-sm">الإشعارات</span>
+                    <div className="flex gap-2 items-center">
+                      {unreadNotif>0 && <button onClick={markAllRead} className="text-[11px] text-violet-400 hover:text-violet-300">تعليم كمقروءة</button>}
+                      <button onClick={()=>setShowNotif(false)} className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center"><X className="w-4 h-4 text-white/40"/></button>
+                    </div>
+                  </div>
+                  {notifications.length===0 && <div className="p-8 text-center text-white/30 text-sm">لا توجد إشعارات</div>}
+                  {notifications.map(n=>(
+                    <div key={n.id} onClick={()=>handleNotifClick(n)} className={`flex gap-3 p-3 hover:bg-white/[0.04] cursor-pointer border-b border-white/[0.03] ${!n.read?'bg-violet-500/[0.06]':''}`}>
+                      <img src={n.fromAvatar} className="w-9 h-9 rounded-full"/>
+                      <div className="flex-1">
+                        <p className="text-[13px] leading-4"><span className="font-bold">{n.fromName}</span> {n.type==='like'? 'أعجب بمنشورك':'علق على منشورك'}</p>
+                        <p className="text-[11px] text-white/30 mt-1">{timeAgo(n.created_at)}</p>
+                      </div>
+                      {!n.read && <div className="w-2 h-2 bg-violet-500 rounded-full mt-2 shrink-0"/>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button onClick={()=>{ setUnreadMessages(0); router.push('/messages'); }} className="relative w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10">
+              <MessageSquare className="w-4 h-4 md:w-5 md:h-5 text-white/60"/>
+              {unreadMessages>0 && <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{unreadMessages>9?'9+':unreadMessages}</span>}
             </button>
 
-            {showNotif && (
-              <div className="fixed top-[92px] left-2 right-2 md:left-auto md:right-4 md:w-[380px] max-h-[70vh] overflow-y-auto bg-[#0a1212] border border-white/10 rounded-2xl shadow-2xl z-[200]">
-                <div className="flex justify-between items-center p-3 border-b border-white/5 sticky top-0 bg-[#0a1212] z-10 rounded-t-2xl">
-                  <span className="font-bold text-sm">الإشعارات</span>
-                  <div className="flex gap-2 items-center">
-                    {unreadNotif>0 && <button onClick={markAllRead} className="text-[11px] text-violet-400 hover:text-violet-300">تعليم كمقروءة</button>}
-                    <button onClick={()=>setShowNotif(false)} className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center"><X className="w-4 h-4 text-white/40"/></button>
-                  </div>
-                </div>
-                {notifications.length===0 && <div className="p-8 text-center text-white/30 text-sm">لا توجد إشعارات</div>}
-                {notifications.map(n=>(
-                  <div key={n.id} onClick={()=>handleNotifClick(n)} className={`flex gap-3 p-3 hover:bg-white/[0.04] cursor-pointer border-b border-white/[0.03] ${!n.read?'bg-violet-500/[0.06]':''}`}>
-                    <img src={n.fromAvatar} className="w-9 h-9 rounded-full"/>
-                    <div className="flex-1">
-                      <p className="text-[13px] leading-4"><span className="font-bold">{n.fromName}</span> {n.type==='like'? 'أعجب بمنشورك':'علق على منشورك'}</p>
-                      <p className="text-[11px] text-white/30 mt-1">{timeAgo(n.created_at)}</p>
-                    </div>
-                    {!n.read && <div className="w-2 h-2 bg-violet-500 rounded-full mt-2 shrink-0"/>}
-                  </div>
-                ))}
-              </div>
-            )}
+            <img src={currentUser?.avatar} onClick={()=>router.push(`/profile/${currentUser?.uid}`)} className="w-8 h-8 rounded-full border border-violet-500/30 cursor-pointer"/>
+            <button onClick={async()=>{ if(confirm('متأكد تبي تطلع؟')) { await signOut(auth); router.push('/login'); } }} className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20"><LogOut className="w-4 h-4 text-red-400"/></button>
           </div>
-
-          <button onClick={()=>{ setUnreadMessages(0); router.push('/messages'); }} className="relative w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10">
-            <MessageSquare className="w-4 h-4 md:w-5 md:h-5 text-white/60"/>
-            {unreadMessages>0 && <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{unreadMessages>9?'9+':unreadMessages}</span>}
-          </button>
-
-          <img src={currentUser?.avatar} onClick={()=>router.push(`/profile/${currentUser?.uid}`)} className="w-8 h-8 rounded-full border border-violet-500/30 cursor-pointer"/>
-          <button onClick={async()=>{ if(confirm('متأكد تبي تطلع؟')) { await signOut(auth); router.push('/login'); } }} className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20"><LogOut className="w-4 h-4 text-red-400"/></button>
-        </div>
-      </header>
+        </header>
+      </div>
+      {/* مسافة فاضية بارتفاع التكر + النافبار عشان الفيد يبدأ تحتو */}
+      <div className="h-[88px] md:h-[92px]" />
     </>
   )
 }
