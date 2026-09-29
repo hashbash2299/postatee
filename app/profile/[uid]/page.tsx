@@ -3,9 +3,10 @@ import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
 import { doc, collection, getDocs, query, where, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, MessageCircle, Send, Loader2, LogOut } from "lucide-react";
+import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, MessageCircle, Send, Loader2, LogOut, Settings, Shield, HelpCircle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { processImage } from "@/lib/imageProcessor";
+import Link from "next/link";
 
 const getNameColor = (role:string) => {
   if(role === "مؤسس") return "text-cyan-400";
@@ -42,6 +43,7 @@ export default function ProfileWall() {
   const router = useRouter();
 
   const handleLogout = async () => {
+    if(!confirm('متأكد عايز تطلع من Postatee؟')) return;
     const u = auth.currentUser;
     if (u) { await updateDoc(doc(db, 'users', u.uid), { isOnline: false }).catch(()=>{}); }
     await signOut(auth);
@@ -93,72 +95,41 @@ export default function ProfileWall() {
   const handleUnfriend = async ()=>{ if(!myUid ||!targetUid) return; await deleteDoc(doc(db,'friends', [myUid, targetUid].sort().join('_'))); setFriendStatus('none'); };
   const handleMessageClick = async()=>{ if(!myUid ||!targetUid) return; const chatId = [myUid, targetUid].sort().join('_'); if(friendStatus==='friends' || chatExists){ const chatSnap = await getDoc(doc(db,'chats',chatId)); if(!chatSnap.exists()){ await setDoc(doc(db,'chats',chatId),{ members:[myUid, targetUid], membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } }, created_at: serverTimestamp(), updated_at: serverTimestamp(), lastMessage: "" }); } router.push(`/messages/${chatId}`); } else { setShowMsgInput(true); } };
   const sendMessageRequest = async()=>{ if(!firstMessage.trim() ||!myUid ||!targetUid) return; await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName, fromAvatar: currentUserData?.avatar, toName: user?.displayName, firstMessage, status: 'pending', created_at: serverTimestamp() }); setFirstMessage(""); setShowMsgInput(false); setMsgRequestStatus('pending'); };
-
-  // ✅ الدالة المعدلة كاملة - بتنضف القديم الضارب وتضغط الجديد
   const handleUploadFile = async (file: File, type:'avatar'|'cover') => {
     if(!file) return;
     try {
       setUploading(type);
-
-      // 1. ضغط الجديد بـ imageProcessor بتاعك
       const compressed = await processImage(file, type);
-      console.log(`✅ ${type} الجديد: ${Math.round(compressed.length/1024)}KB`);
-
-      // 2. افحص المستند القديم لو فيه صور ضخمة
       const userRef = doc(db, 'users', targetUid);
       const snap = await getDoc(userRef);
-
       if(snap.exists()){
         const data = snap.data();
         const oldAvatarLen = data.avatar?.length || 0;
         const oldCoverLen = data.cover?.length || 0;
-
-        // لو فيه حاجة ضخمة اكتر من 350KB - نظفها مع التحديث
         if(oldAvatarLen > 350000 || oldCoverLen > 350000){
           const updates: any = {};
-
           if(type === 'avatar'){
             updates.avatar = compressed;
-            // لو الكفر القديم ضخم، رجعو لافتراضي
-            if(oldCoverLen > 350000){
-              updates.cover = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800";
-            }
+            if(oldCoverLen > 350000) updates.cover = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800";
           } else {
             updates.cover = compressed;
-            // لو الأفاتار القديم ضخم، رجعو لافتراضي
-            if(oldAvatarLen > 350000){
-              updates.avatar = `https://i.pravatar.cc/200?img=${Math.floor(Math.random()*70)}`;
-            }
+            if(oldAvatarLen > 350000) updates.avatar = `https://i.pravatar.cc/200?img=${Math.floor(Math.random()*70)}`;
           }
-
           await updateDoc(userRef, updates);
           return;
         }
       }
-
-      // 3. لو المستند نظيف، حدث عادي
       await updateDoc(doc(db, 'users', targetUid), { [type]: compressed });
-
-    } catch(err:any){
-      alert("فشل: " + err.message);
-    } finally {
-      setUploading(null);
-    }
+    } catch(err:any){ alert("فشل: " + err.message); } finally { setUploading(null); }
   };
-
   const pickImage = (type:'avatar'|'cover') => {
     const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = (e:any) => {
-      const file = e.target.files?.[0];
-      if(file) handleUploadFile(file, type);
-    };
+    input.type = 'file'; input.accept = 'image/*';
+    input.onchange = (e:any) => { const file = e.target.files?.[0]; if(file) handleUploadFile(file, type); };
     input.click();
   };
 
   if (!user) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري تحميل الحائط...</div>;
-
   const filteredPosts = posts.filter((p:any)=>{ if(tab==='all') return true; if(tab==='media') return p.image || p.video || p.media; if(tab==='text') return!p.image &&!p.video &&!p.media; return true; });
 
   return (
@@ -172,30 +143,17 @@ export default function ProfileWall() {
       <div className="relative h-[200px] lg:h-[300px] w-full bg-white/5 group">
         {user.cover? <img src={user.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
         {uploading==='cover' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20"><Loader2 className="w-8 h-8 text-white animate-spin"/></div>}
-
-        {isMine && (
-          <button onClick={() => pickImage('cover')} className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur px-3 py-2 rounded-full border border-white/30 active:scale-90 flex items-center gap-2 text-xs font-bold">
-            {uploading==='cover'? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>} تعديل الغلاف
-          </button>
-        )}
-
+        {isMine && (<button onClick={() => pickImage('cover')} className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur px-3 py-2 rounded-full border border-white/30 active:scale-90 flex items-center gap-2 text-xs font-bold">{uploading==='cover'? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>} تعديل الغلاف</button>)}
         <div className="absolute -bottom-12 right-6 flex items-end gap-4 z-10">
           <div className="relative">
             <div className="w-24 h-24 lg:w-28 lg:h-28 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden">
               {user.avatar? <img src={user.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}
               {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
             </div>
-            {isMine && (
-              <button onClick={() => pickImage('avatar')} className="absolute -bottom-1 -left-1 z-30 bg-white p-2.5 rounded-full active:scale-90 shadow-lg flex items-center justify-center w-9 h-9 border-2 border-[#050a0a]">
-                <Camera className="w-4 h-4 text-black"/>
-              </button>
-            )}
+            {isMine && (<button onClick={() => pickImage('avatar')} className="absolute -bottom-1 -left-1 z-30 bg-white p-2.5 rounded-full active:scale-90 shadow-lg flex items-center justify-center w-9 h-9 border-2 border-[#050a0a]"><Camera className="w-4 h-4 text-black"/></button>)}
           </div>
           <div className="pb-2">
-            <div className="flex items-center gap-2">
-              <h1 className={`text-xl font-black ${getNameColor(user.role)}`}>{user.displayName}</h1>
-              <RoleBadge role={user.role}/>
-            </div>
+            <div className="flex items-center gap-2"><h1 className={`text-xl font-black ${getNameColor(user.role)}`}>{user.displayName}</h1><RoleBadge role={user.role}/></div>
             <p className="text-white/50 text-xs mt-1">@{user.username} • {friendsCount} صديق</p>
           </div>
         </div>
@@ -204,36 +162,42 @@ export default function ProfileWall() {
       {!isMine && myUid && (
         <div className="max-w-[600px] mx-auto px-6 mt-[68px]">
           <div className="flex gap-2.5 flex-wrap">
-            {friendStatus==='friends'? (
-              <><button onClick={handleUnfriend} className="h-9 px-5 rounded-full bg-white/[0.06] border border-white/10 text-white font-bold text-[12px] flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5"/> صديق</button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-[#00E5FF] text-black font-black text-[12px] flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5"/> مراسلة</button></>
-            ) : friendStatus==='pending_sent'? (
-              <><button onClick={handleCancel} className="h-9 px-5 rounded-full bg-white/10 border border-white/15 text-white font-bold text-[12px] flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> تم الإرسال</button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400/50 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> {msgRequestStatus==='pending'?'تم الطلب':'طلب مراسلة'}</button></>
-            ) : friendStatus==='pending_received'? (
-              <><button onClick={handleAccept} className="h-9 px-5 rounded-full bg-green-500 text-white font-black text-[12px] flex items-center gap-1.5"><Check className="w-3.5 h-3.5"/> قبول</button><button onClick={handleCancel} className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white"/></button></>
-            ) : (
-              <><button onClick={handleSend} className="h-9 px-5 rounded-full bg-white text-black font-black text-[12px] flex items-center gap-1.5"><UserPlus className="w-3.5 h-3.5"/> إضافة صديق</button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> مراسلة</button></>
-            )}
+            {friendStatus==='friends'? (<><button onClick={handleUnfriend} className="h-9 px-5 rounded-full bg-white/[0.06] border border-white/10 text-white font-bold text-[12px] flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5"/> صديق</button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-[#00E5FF] text-black font-black text-[12px] flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5"/> مراسلة</button></>) : friendStatus==='pending_sent'? (<><button onClick={handleCancel} className="h-9 px-5 rounded-full bg-white/10 border border-white/15 text-white font-bold text-[12px] flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> تم الإرسال</button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400/50 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> {msgRequestStatus==='pending'?'تم الطلب':'طلب مراسلة'}</button></>) : friendStatus==='pending_received'? (<><button onClick={handleAccept} className="h-9 px-5 rounded-full bg-green-500 text-white font-black text-[12px] flex items-center gap-1.5"><Check className="w-3.5 h-3.5"/> قبول</button><button onClick={handleCancel} className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white"/></button></>) : (<><button onClick={handleSend} className="h-9 px-5 rounded-full bg-white text-black font-black text-[12px] flex items-center gap-1.5"><UserPlus className="w-3.5 h-3.5"/> إضافة صديق</button><button onClick={handleMessageClick} className="h-9 px-5 rounded-full bg-transparent border border-cyan-400 text-cyan-400 font-bold text-[12px] flex items-center gap-1.5"><Send className="w-3.5 h-3.5"/> مراسلة</button></>)}
           </div>
-        </div>
-      )}
-
-      {isMine && (
-        <div className="max-w-[600px] mx-auto px-6 mt-[70px] lg:hidden">
-          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 py-3 rounded-xl font-bold active:scale-95">
-            <LogOut className="w-5 h-5" /> تسجيل خروج
-          </button>
         </div>
       )}
 
       {showMsgInput && (<div className="max-w-[600px] mx-auto mt-6 px-3"><div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2"><input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${user.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none text-white"/><button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button><button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4 text-white"/></button></div></div>)}
 
-      <div className="max-w-[600px] mx-auto mt-8 px-3 pb-20">
+      <div className="max-w-[600px] mx-auto mt-8 px-3 pb-10">
         <div className="flex bg-white/[0.05] rounded-2xl p-1.5 gap-1.5 border border-white/10">
           <button onClick={()=>setTab('all')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='all'?'bg-[#00E5FF] text-black':'text-white/50'}`}>الكل</button>
           <button onClick={()=>setTab('media')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='media'?'bg-[#00E5FF] text-black':'text-white/50'}`}>وسائط</button>
           <button onClick={()=>setTab('text')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='text'?'bg-[#00E5FF] text-black':'text-white/50'}`}>كتابة</button>
         </div>
         <div className="space-y-3 mt-4">{filteredPosts.map((p:any)=><div key={p.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4"><p className="text-[15px] text-white/90 whitespace-pre-wrap">{p.content}</p>{p.image && <img src={p.image} className="mt-3 rounded-xl w-full"/>}</div>)}</div>
+
+        {/* ✅ قسم الإعدادات وتسجيل الخروج - زي الفيس */}
+        {isMine && (
+          <div className="mt-12 border-t border-white/10 pt-6 space-y-3">
+            <h3 className="text-[13px] font-bold text-white/40 px-2">الإعدادات</h3>
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden">
+              <Link href="/settings" className="flex items-center justify-between p-4 hover:bg-white/[0.05] transition">
+                <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><Settings className="w-5 h-5"/></div><span className="text-sm font-bold">الإعدادات والخصوصية</span></div><ArrowLeft className="w-4 h-4 text-white/30 rotate-180"/>
+              </Link>
+              <div className="h-[1px] bg-white/10 mx-4"/>
+              <button className="w-full flex items-center justify-between p-4 hover:bg-white/[0.05] transition opacity-60">
+                <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><Shield className="w-5 h-5"/></div><span className="text-sm font-bold">المساعدة والدعم</span></div><HelpCircle className="w-4 h-4 text-white/30"/>
+              </button>
+            </div>
+
+            {/* زر تسجيل الخروج النهائي - تحت خالص */}
+            <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/15 text-red-400 border border-red-500/20 py-3.5 rounded-2xl font-black text-[14px] active:scale-[0.98] transition-all">
+              <LogOut className="w-5 h-5" /> تسجيل خروج
+            </button>
+            <p className="text-center text-[10px] text-white/20 mt-2">Postatee v1.0 • منصة سودانية 🇸🇩</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,11 +1,10 @@
 "use client"
 import { useEffect, useState } from "react";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { useRouter } from "next/navigation";
+import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import Link from "next/link";
-import { Users, LogOut, Bell, MessageCircle, Circle } from "lucide-react";
+import { Users, Bell, MessageCircle, Circle } from "lucide-react";
 import TickerBar from "./TickerBar";
 
 export default function FixedHeader({ onOpenContacts }: { onOpenContacts: () => void }){
@@ -14,7 +13,6 @@ export default function FixedHeader({ onOpenContacts }: { onOpenContacts: () => 
   const [notifCount, setNotifCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
   const [onlineCount, setOnlineCount] = useState(0);
-  const router = useRouter();
 
   useEffect(()=>{
     const unsub = onAuthStateChanged(auth, async (u)=>{
@@ -29,41 +27,33 @@ export default function FixedHeader({ onOpenContacts }: { onOpenContacts: () => 
     return ()=> unsub();
   },[]);
 
-  const logout = async ()=>{
-    if(confirm('متأكد تبي تطلع؟')){
-      const u = auth.currentUser;
-      if(u) await updateDoc(doc(db,'users',u.uid),{isOnline:false}).catch(()=>{});
-      await signOut(auth);
-      router.push('/login');
-    }
-  };
-
   if(!currentUser) return null;
 
   return (
     <div className="fixed top-0 left-0 right-0 z-[100] w-full">
       <TickerBar />
-      {/* Desktop */}
+      {/* Desktop - بدون زر خروج */}
       <header className="hidden lg:flex items-center justify-between px-6 py-3 bg-[#122025]/95 backdrop-blur-xl border-b border-[#1A2E35] w-full">
         <div className="flex items-center gap-4">
           <Link href={`/profile/${currentUser?.uid}`} className="flex items-center gap-2"><img src={currentUser?.photoURL || currentUser?.avatar} className="w-10 h-10 rounded-full border-2 border-[#00E5FF] object-cover"/><span className="font-bold text-sm">{currentUser?.displayName}</span></Link>
-          <Link href="/friends" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Users className="w-5 h-5"/>{reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
+          <button onClick={onOpenContacts} className="relative w-10 h-10 rounded-full bg-[#00E5FF]/20 border border-[#00E5FF]/30 flex items-center justify-center"><Circle className="w-5 h-5 text-[#00E5FF] fill-[#00E5FF]" />{onlineCount>0 && <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center">{onlineCount}</span>}</button>
           <Link href="/messages" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-5 h-5"/>{msgCount>0 && <span className="absolute -top-1 -right-1 bg-[#00E5FF] text-black text-[11px] w-5 h-5 rounded-full flex items-center justify-center font-bold">{msgCount}</span>}</Link>
+          <Link href="/friends" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Users className="w-5 h-5"/>{reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
           <Link href="/notifications" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Bell className="w-5 h-5"/>{notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{notifCount}</span>}</Link>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={logout} className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center"><LogOut className="w-5 h-5 text-red-400"/></button>
           <div className="text-right"><h1 className="font-black text-[22px] leading-none">Posta<span className="text-[#00E5FF]">tee</span></h1><p className="text-[9px] text-gray-400">منصة سودانية</p></div><div className="w-10 h-10 bg-[#00E5FF] rounded-xl flex items-center justify-center text-black font-black">P</div>
         </div>
       </header>
-      {/* Mobile */}
+
+      {/* Mobile - الترتيب الجديد الثابت: بروفايل | متصلين | رسائل | اصدقاء | تنبيهات */}
       <header className="flex lg:hidden items-center justify-between px-3 py-3 bg-[#122025]/95 backdrop-blur-xl border-b border-[#1A2E35]">
         <div className="flex items-center gap-2">
           <Link href={`/profile/${currentUser?.uid}`}><img src={currentUser?.photoURL || currentUser?.avatar} className="w-9 h-9 rounded-full border-2 border-[#00E5FF] object-cover"/></Link>
-          <Link href="/friends" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Users className="w-4 h-4"/>{reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
-          <Link href="/messages" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-4 h-4"/>{msgCount>0 && <span className="absolute -top-1 -right-1 bg-[#00E5FF] text-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{msgCount}</span>}</Link>
           <button onClick={onOpenContacts} className="relative w-8 h-8 rounded-full bg-[#00E5FF]/20 border border-[#00E5FF]/30 flex items-center justify-center"><Circle className="w-4 h-4 text-[#00E5FF] fill-[#00E5FF]" />{onlineCount>0 && <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center">{onlineCount}</span>}</button>
-          <button onClick={logout} className="w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center"><LogOut className="w-4 h-4 text-red-400"/></button>
+          <Link href="/messages" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-4 h-4"/>{msgCount>0 && <span className="absolute -top-1 -right-1 bg-[#00E5FF] text-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{msgCount}</span>}</Link>
+          <Link href="/friends" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Users className="w-4 h-4"/>{reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
+          <Link href="/notifications" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Bell className="w-4 h-4"/>{notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">{notifCount > 9? '9+' : notifCount}</span>}</Link>
         </div>
         <div className="flex items-center gap-2"><h1 className="font-black text-[18px]">Posta<span className="text-[#00E5FF]">tee</span></h1><div className="w-8 h-8 bg-[#00E5FF] rounded-lg flex items-center justify-center text-black font-black">P</div></div>
       </header>
