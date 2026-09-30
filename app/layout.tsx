@@ -8,7 +8,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-[#0B1418] text-white">
         <PresenceProvider>
           <FixedHeaderWrapper />
-          <div className="pt-[88px]">{children}</div>
+          <div className="pt-[110px]">{children}</div>
         </PresenceProvider>
       </body>
     </html>
