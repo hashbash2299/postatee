@@ -7,8 +7,6 @@ import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified
 import { useParams, useRouter } from "next/navigation";
 import { processImage } from "@/lib/imageProcessor";
 import Link from "next/link";
-
-// ✅ استيراد الهوك الموحد
 import { useLiveUser } from "@/lib/hooks/useLiveUser";
 
 const getNameColor = (role:string) => {
@@ -56,7 +54,6 @@ export default function ProfileWall() {
   const [uploading, setUploading] = useState<'avatar'|'cover'|null>(null);
   const router = useRouter();
 
-  // ✅ جلب المستخدم لايف بالصورة الموحدة والمتصل الحقيقي
   const liveUser = useLiveUser(targetUid);
   const displayUser = liveUser || user;
 
@@ -77,7 +74,6 @@ export default function ProfileWall() {
         const mySnap = await getDoc(doc(db,'users',me.uid));
         if(mySnap.exists()) setCurrentUserData(mySnap.data());
         setIsMine(me.uid === targetUid);
-        // ✅ حدث انك متصل
         await updateDoc(doc(db,'users',me.uid), { isOnline: true, lastSeen: serverTimestamp() }).catch(()=>{});
       }
       const postsRef = collection(db, 'posts');
@@ -95,7 +91,6 @@ export default function ProfileWall() {
     return () => { unsubUser(); unsubAuth(); };
   }, [targetUid]);
 
-  //... باقي useEffect للاصدقاء نفسه ما تغير
   useEffect(() => {
     if(!myUid ||!targetUid || myUid === targetUid) return;
     const friendDocId = [myUid, targetUid].sort().join('_');
@@ -116,14 +111,23 @@ export default function ProfileWall() {
   const handleUnfriend = async ()=>{ if(!myUid ||!targetUid) return; await deleteDoc(doc(db,'friends', [myUid, targetUid].sort().join('_'))); setFriendStatus('none'); };
   const handleMessageClick = async()=>{ if(!myUid ||!targetUid) return; const chatId = [myUid, targetUid].sort().join('_'); if(friendStatus==='friends' || chatExists){ const chatSnap = await getDoc(doc(db,'chats',chatId)); if(!chatSnap.exists()){ await setDoc(doc(db,'chats',chatId),{ members:[myUid, targetUid], membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } }, created_at: serverTimestamp(), updated_at: serverTimestamp(), lastMessage: "" }); } router.push(`/messages/${chatId}`); } else { setShowMsgInput(true); } };
   const sendMessageRequest = async()=>{ if(!firstMessage.trim() ||!myUid ||!targetUid) return; await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName, fromAvatar: currentUserData?.avatar, toName: user?.displayName, firstMessage, status: 'pending', created_at: serverTimestamp() }); setFirstMessage(""); setShowMsgInput(false); setMsgRequestStatus('pending'); };
+
+  // ✅ النسخة الموحدة المصححة
   const handleUploadFile = async (file: File, type:'avatar'|'cover') => {
     if(!file) return;
     try {
       setUploading(type);
       const compressed = await processImage(file, type);
-      await updateDoc(doc(db, 'users', targetUid), { [type]: compressed, lastSeen: serverTimestamp() });
+      await updateDoc(doc(db, 'users', targetUid), {
+        [type]: compressed,
+       ...(type === 'avatar'? { photoURL: compressed, avatar: compressed } : { cover: compressed }),
+        lastSeen: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      setUser((prev:any)=> ({...prev, [type]: compressed,...(type==='avatar'? {photoURL: compressed}: {})}));
     } catch(err:any){ alert("فشل: " + err.message); } finally { setUploading(null); }
   };
+
   const pickImage = (type:'avatar'|'cover') => {
     const input = document.createElement('input');
     input.type = 'file'; input.accept = 'image/*';
@@ -152,7 +156,6 @@ export default function ProfileWall() {
               {displayUser.avatar? <img src={displayUser.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}
               {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
             </div>
-            {/* ✅ النقطة الخضرا الحقيقية */}
             {liveUser?.reallyOnline && <span className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 rounded-full border-[3px] border-[#050a0a] shadow-[0_0_10px_rgba(34,197,94,0.6)]"></span>}
             {isMine && (<button onClick={() => pickImage('avatar')} className="absolute -bottom-1 -left-1 z-30 bg-white p-2.5 rounded-full active:scale-90 shadow-lg flex items-center justify-center w-9 h-9 border-2 border-[#050a0a]"><Camera className="w-4 h-4 text-black"/></button>)}
           </div>
