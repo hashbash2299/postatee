@@ -61,7 +61,7 @@ export default function Page(){
   const onlineUsers = allUsers.filter((u:any) => u.isOnline);
   const offlineUsers = allUsers.filter((u:any) =>!u.isOnline);
 
-  if (loading) return <div className="min-h-screen bg-[#0B1418] flex items-center justify-center text-cyan-400">أهلا بيك في  بوستاتك</div>;
+  if (loading) return <div className="min-h-screen bg-[#0B1418] flex items-center justify-center text-cyan-400">أهلا بيك في Postatee</div>;
 
   return (
     <div className="min-h-screen bg-[#0B1418] text-white overflow-x-hidden" dir="rtl">
@@ -121,7 +121,7 @@ export default function Page(){
     <div className="flex items-center gap-3">
       <div className="w-11 h-11 bg-[#00E676]/20 rounded-xl flex items-center justify-center text-xl">💬</div>
       <div>
-        <h3 className="font-black text-[15px]">غرف دردشة سودانية</h3>
+        <h3 className="font-black text-[15px]">غرف الدردشات العامة</h3>
         <p className="text-[11px] text-white/50">بنات • الجزيرة • دارفور • كردفان</p>
       </div>
     </div>
