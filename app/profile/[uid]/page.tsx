@@ -19,13 +19,12 @@ const getNameColor = (role:string) => {
 };
 const RoleBadge = ({ role }: { role: string }) => {
   const cleanRole = (role||"").trim();
-  if (cleanRole === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(139,92,246,0.5)]"><Crown className="w-3 h-3 fill-white"/> المالك</span>;
+  if (cleanRole === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full"><Crown className="w-3 h-3 fill-white"/> المالك</span>;
   if (cleanRole === "مؤسس") return <span className="inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/50 text-cyan-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Gem className="w-3 h-3"/> مؤسس</span>;
   if (cleanRole === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[11px] font-black px-2.5 py-0.5 rounded-full"><Star className="w-3 h-3 fill-red-400"/> هامة</span>;
   if (cleanRole === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Verified className="w-3 h-3"/> موثق</span>;
   return null;
 };
-
 const getLastSeenText = (ms:number, isOnline:boolean) => {
   if(!ms) return isOnline? "متصل الآن" : "غير متصل";
   const s = Math.floor((Date.now()-ms)/1000);
@@ -53,14 +52,13 @@ export default function ProfileWall() {
   const [firstMessage, setFirstMessage] = useState("");
   const [uploading, setUploading] = useState<'avatar'|'cover'|null>(null);
   const router = useRouter();
-
   const liveUser = useLiveUser(targetUid);
   const displayUser = liveUser || user;
 
   const handleLogout = async () => {
     if(!confirm('متأكد عايز تطلع من Postatee؟')) return;
     const u = auth.currentUser;
-    if (u) { await updateDoc(doc(db, 'users', u.uid), { isOnline: false, lastSeen: serverTimestamp() }).catch(()=>{}); }
+    if (u) await updateDoc(doc(db, 'users', u.uid), { isOnline: false, lastSeen: serverTimestamp() }).catch(()=>{});
     await signOut(auth);
     router.push('/login');
   };
@@ -112,7 +110,6 @@ export default function ProfileWall() {
   const handleMessageClick = async()=>{ if(!myUid ||!targetUid) return; const chatId = [myUid, targetUid].sort().join('_'); if(friendStatus==='friends' || chatExists){ const chatSnap = await getDoc(doc(db,'chats',chatId)); if(!chatSnap.exists()){ await setDoc(doc(db,'chats',chatId),{ members:[myUid, targetUid], membersInfo: { [myUid]: { name: currentUserData?.displayName, avatar: currentUserData?.avatar }, [targetUid]: { name: user?.displayName, avatar: user?.avatar } }, created_at: serverTimestamp(), updated_at: serverTimestamp(), lastMessage: "" }); } router.push(`/messages/${chatId}`); } else { setShowMsgInput(true); } };
   const sendMessageRequest = async()=>{ if(!firstMessage.trim() ||!myUid ||!targetUid) return; await addDoc(collection(db,'messageRequests'),{ from: myUid, to: targetUid, fromName: currentUserData?.displayName, fromAvatar: currentUserData?.avatar, toName: user?.displayName, firstMessage, status: 'pending', created_at: serverTimestamp() }); setFirstMessage(""); setShowMsgInput(false); setMsgRequestStatus('pending'); };
 
-  // ✅ النسخة الموحدة المصححة
   const handleUploadFile = async (file: File, type:'avatar'|'cover') => {
     if(!file) return;
     try {
@@ -120,14 +117,12 @@ export default function ProfileWall() {
       const compressed = await processImage(file, type);
       await updateDoc(doc(db, 'users', targetUid), {
         [type]: compressed,
-       ...(type === 'avatar'? { photoURL: compressed, avatar: compressed } : { cover: compressed }),
+       ...(type === 'avatar'? { photoURL: compressed, avatar: compressed, photo: compressed } : { cover: compressed }),
         lastSeen: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      setUser((prev:any)=> ({...prev, [type]: compressed,...(type==='avatar'? {photoURL: compressed}: {})}));
     } catch(err:any){ alert("فشل: " + err.message); } finally { setUploading(null); }
   };
-
   const pickImage = (type:'avatar'|'cover') => {
     const input = document.createElement('input');
     input.type = 'file'; input.accept = 'image/*';
@@ -145,33 +140,29 @@ export default function ProfileWall() {
         <span className={`font-black ${getNameColor(displayUser.role)}`}>{displayUser.displayName}</span>
         <div className="w-9"/>
       </header>
-
       <div className="relative h-[200px] lg:h-[300px] w-full bg-white/5 group">
         {displayUser.cover? <img src={displayUser.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
         {uploading==='cover' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20"><Loader2 className="w-8 h-8 text-white animate-spin"/></div>}
-        {isMine && (<button onClick={() => pickImage('cover')} className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur px-3 py-2 rounded-full border border-white/30 active:scale-90 flex items-center gap-2 text-xs font-bold">{uploading==='cover'? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>} تعديل الغلاف</button>)}
+        {isMine && (<button onClick={() => pickImage('cover')} className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur px-3 py-2 rounded-full border border-white/30 flex items-center gap-2 text-xs font-bold"><Camera className="w-4 h-4"/> تعديل الغلاف</button>)}
         <div className="absolute -bottom-12 right-6 flex items-end gap-4 z-10">
           <div className="relative">
             <div className="w-24 h-24 lg:w-28 lg:h-28 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden">
               {displayUser.avatar? <img src={displayUser.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}
               {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
             </div>
-            {liveUser?.reallyOnline && <span className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 rounded-full border-[3px] border-[#050a0a] shadow-[0_0_10px_rgba(34,197,94,0.6)]"></span>}
-            {isMine && (<button onClick={() => pickImage('avatar')} className="absolute -bottom-1 -left-1 z-30 bg-white p-2.5 rounded-full active:scale-90 shadow-lg flex items-center justify-center w-9 h-9 border-2 border-[#050a0a]"><Camera className="w-4 h-4 text-black"/></button>)}
+            {liveUser?.reallyOnline && <span className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 rounded-full border-[3px] border-[#050a0a]"></span>}
+            {isMine && (<button onClick={() => pickImage('avatar')} className="absolute -bottom-1 -left-1 z-30 bg-white p-2.5 rounded-full shadow-lg flex items-center justify-center w-9 h-9 border-2 border-[#050a0a]"><Camera className="w-4 h-4 text-black"/></button>)}
           </div>
           <div className="pb-2">
             <div className="flex items-center gap-2"><h1 className={`text-xl font-black ${getNameColor(displayUser.role)}`}>{displayUser.displayName}</h1><RoleBadge role={displayUser.role}/></div>
             <p className="text-white/50 text-xs mt-1 flex items-center gap-2">
               @{displayUser.username} • {friendsCount} صديق •
-              <span className={`${liveUser?.reallyOnline? 'text-green-400 font-bold' : 'text-white/40'}`}>
-                {liveUser? getLastSeenText(liveUser.lastSeenMs, liveUser.reallyOnline) : '...'}
-              </span>
+              <span className={`${liveUser?.reallyOnline? 'text-green-400 font-bold' : 'text-white/40'}`}>{liveUser? getLastSeenText(liveUser.lastSeenMs, liveUser.reallyOnline) : '...'}</span>
               {liveUser?.reallyOnline && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse inline-block"></span>}
             </p>
           </div>
         </div>
       </div>
-
       {!isMine && myUid && (
         <div className="max-w-[600px] mx-auto px-6 mt-[68px]">
           <div className="flex gap-2.5 flex-wrap">
@@ -179,9 +170,7 @@ export default function ProfileWall() {
           </div>
         </div>
       )}
-
       {showMsgInput && (<div className="max-w-[600px] mx-auto mt-6 px-3"><div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2"><input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${displayUser.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none text-white"/><button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button><button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4 text-white"/></button></div></div>)}
-
       <div className="max-w-[600px] mx-auto mt-8 px-3 pb-10">
         <div className="flex bg-white/[0.05] rounded-2xl p-1.5 gap-1.5 border border-white/10">
           <button onClick={()=>setTab('all')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='all'?'bg-[#00E5FF] text-black':'text-white/50'}`}>الكل</button>
@@ -189,22 +178,15 @@ export default function ProfileWall() {
           <button onClick={()=>setTab('text')} className={`flex-1 py-2.5 rounded-xl font-black text-[13px] ${tab==='text'?'bg-[#00E5FF] text-black':'text-white/50'}`}>كتابة</button>
         </div>
         <div className="space-y-3 mt-4">{filteredPosts.map((p:any)=><div key={p.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4"><p className="text-[15px] text-white/90 whitespace-pre-wrap">{p.content}</p>{p.image && <img src={p.image} className="mt-3 rounded-xl w-full"/>}</div>)}</div>
-
         {isMine && (
           <div className="mt-12 border-t border-white/10 pt-6 space-y-3">
             <h3 className="text-[13px] font-bold text-white/40 px-2">الإعدادات</h3>
             <div className="bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden">
-              <Link href="/settings" className="flex items-center justify-between p-4 hover:bg-white/[0.05] transition">
-                <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><Settings className="w-5 h-5"/></div><span className="text-sm font-bold">الإعدادات والخصوصية</span></div><ArrowLeft className="w-4 h-4 text-white/30 rotate-180"/>
-              </Link>
+              <Link href="/settings" className="flex items-center justify-between p-4 hover:bg-white/[0.05] transition"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><Settings className="w-5 h-5"/></div><span className="text-sm font-bold">الإعدادات والخصوصية</span></div><ArrowLeft className="w-4 h-4 text-white/30 rotate-180"/></Link>
               <div className="h-[1px] bg-white/10 mx-4"/>
-              <button className="w-full flex items-center justify-between p-4 hover:bg-white/[0.05] transition opacity-60">
-                <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><Shield className="w-5 h-5"/></div><span className="text-sm font-bold">المساعدة والدعم</span></div><HelpCircle className="w-4 h-4 text-white/30"/>
-              </button>
+              <button className="w-full flex items-center justify-between p-4 opacity-60"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><Shield className="w-5 h-5"/></div><span className="text-sm font-bold">المساعدة والدعم</span></div><HelpCircle className="w-4 h-4 text-white/30"/></button>
             </div>
-            <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/15 text-red-400 border border-red-500/20 py-3.5 rounded-2xl font-black text-[14px] active:scale-[0.98] transition-all">
-              <LogOut className="w-5 h-5" /> تسجيل خروج
-            </button>
+            <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/15 text-red-400 border border-red-500/20 py-3.5 rounded-2xl font-black text-[14px]"><LogOut className="w-5 h-5" /> تسجيل خروج</button>
           </div>
         )}
       </div>
