@@ -8,19 +8,33 @@ import { useParams, useRouter } from "next/navigation";
 import { processImage } from "@/lib/imageProcessor";
 import Link from "next/link";
 
+// ✅ استيراد الهوك الموحد
+import { useLiveUser } from "@/lib/hooks/useLiveUser";
+
 const getNameColor = (role:string) => {
-  if(role === "مؤسس") return "text-cyan-400";
-  if(role === "شخصية هامة") return "text-red-400";
-  if(role === "شارة خضراء") return "text-green-400";
-  if(role === "مالك") return "text-cyan-300";
+  const cleanRole = (role||"").trim();
+  if(cleanRole === "مؤسس") return "text-cyan-400";
+  if(cleanRole === "شخصية هامة") return "text-red-400";
+  if(cleanRole === "شارة خضراء") return "text-green-400";
+  if(cleanRole === "مالك") return "text-violet-400 font-black";
   return "text-white";
 };
 const RoleBadge = ({ role }: { role: string }) => {
-  if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[11px] font-black px-2.5 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
-  if (role === "مؤسس") return <span className="inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/50 text-cyan-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Gem className="w-3 h-3"/> مؤسس</span>;
-  if (role === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[11px] font-black px-2.5 py-0.5 rounded-full"><Star className="w-3 h-3 fill-red-400"/> هامة</span>;
-  if (role === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Verified className="w-3 h-3"/> موثق</span>;
+  const cleanRole = (role||"").trim();
+  if (cleanRole === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(139,92,246,0.5)]"><Crown className="w-3 h-3 fill-white"/> المالك</span>;
+  if (cleanRole === "مؤسس") return <span className="inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/50 text-cyan-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Gem className="w-3 h-3"/> مؤسس</span>;
+  if (cleanRole === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[11px] font-black px-2.5 py-0.5 rounded-full"><Star className="w-3 h-3 fill-red-400"/> هامة</span>;
+  if (cleanRole === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Verified className="w-3 h-3"/> موثق</span>;
   return null;
+};
+
+const getLastSeenText = (ms:number, isOnline:boolean) => {
+  if(!ms) return isOnline? "متصل الآن" : "غير متصل";
+  const s = Math.floor((Date.now()-ms)/1000);
+  if(s < 90 && isOnline) return "متصل الآن";
+  if(s < 3600) return `نشط منذ ${Math.floor(s/60)} د`;
+  if(s < 86400) return `نشط منذ ${Math.floor(s/3600)} س`;
+  return `نشط منذ ${Math.floor(s/86400)} ي`;
 };
 
 export default function ProfileWall() {
@@ -42,10 +56,14 @@ export default function ProfileWall() {
   const [uploading, setUploading] = useState<'avatar'|'cover'|null>(null);
   const router = useRouter();
 
+  // ✅ جلب المستخدم لايف بالصورة الموحدة والمتصل الحقيقي
+  const liveUser = useLiveUser(targetUid);
+  const displayUser = liveUser || user;
+
   const handleLogout = async () => {
     if(!confirm('متأكد عايز تطلع من Postatee؟')) return;
     const u = auth.currentUser;
-    if (u) { await updateDoc(doc(db, 'users', u.uid), { isOnline: false }).catch(()=>{}); }
+    if (u) { await updateDoc(doc(db, 'users', u.uid), { isOnline: false, lastSeen: serverTimestamp() }).catch(()=>{}); }
     await signOut(auth);
     router.push('/login');
   };
@@ -59,6 +77,8 @@ export default function ProfileWall() {
         const mySnap = await getDoc(doc(db,'users',me.uid));
         if(mySnap.exists()) setCurrentUserData(mySnap.data());
         setIsMine(me.uid === targetUid);
+        // ✅ حدث انك متصل
+        await updateDoc(doc(db,'users',me.uid), { isOnline: true, lastSeen: serverTimestamp() }).catch(()=>{});
       }
       const postsRef = collection(db, 'posts');
       const q1 = await getDocs(query(postsRef, where('uid','==', targetUid)));
@@ -75,6 +95,7 @@ export default function ProfileWall() {
     return () => { unsubUser(); unsubAuth(); };
   }, [targetUid]);
 
+  //... باقي useEffect للاصدقاء نفسه ما تغير
   useEffect(() => {
     if(!myUid ||!targetUid || myUid === targetUid) return;
     const friendDocId = [myUid, targetUid].sort().join('_');
@@ -100,26 +121,7 @@ export default function ProfileWall() {
     try {
       setUploading(type);
       const compressed = await processImage(file, type);
-      const userRef = doc(db, 'users', targetUid);
-      const snap = await getDoc(userRef);
-      if(snap.exists()){
-        const data = snap.data();
-        const oldAvatarLen = data.avatar?.length || 0;
-        const oldCoverLen = data.cover?.length || 0;
-        if(oldAvatarLen > 350000 || oldCoverLen > 350000){
-          const updates: any = {};
-          if(type === 'avatar'){
-            updates.avatar = compressed;
-            if(oldCoverLen > 350000) updates.cover = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800";
-          } else {
-            updates.cover = compressed;
-            if(oldAvatarLen > 350000) updates.avatar = `https://i.pravatar.cc/200?img=${Math.floor(Math.random()*70)}`;
-          }
-          await updateDoc(userRef, updates);
-          return;
-        }
-      }
-      await updateDoc(doc(db, 'users', targetUid), { [type]: compressed });
+      await updateDoc(doc(db, 'users', targetUid), { [type]: compressed, lastSeen: serverTimestamp() });
     } catch(err:any){ alert("فشل: " + err.message); } finally { setUploading(null); }
   };
   const pickImage = (type:'avatar'|'cover') => {
@@ -129,32 +131,40 @@ export default function ProfileWall() {
     input.click();
   };
 
-  if (!user) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري تحميل الحائط...</div>;
+  if (!displayUser) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري تحميل الحائط...</div>;
   const filteredPosts = posts.filter((p:any)=>{ if(tab==='all') return true; if(tab==='media') return p.image || p.video || p.media; if(tab==='text') return!p.image &&!p.video &&!p.media; return true; });
 
   return (
     <div className="min-h-screen bg-[#050a0a] text-white" dir="rtl">
       <header className="sticky top-0 z-50 h-[56px] bg-[#050a0a]/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-4">
         <button onClick={()=>router.push('/')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><ArrowLeft className="w-5 h-5 text-white"/></button>
-        <span className={`font-black ${getNameColor(user.role)}`}>{user.displayName}</span>
+        <span className={`font-black ${getNameColor(displayUser.role)}`}>{displayUser.displayName}</span>
         <div className="w-9"/>
       </header>
 
       <div className="relative h-[200px] lg:h-[300px] w-full bg-white/5 group">
-        {user.cover? <img src={user.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
+        {displayUser.cover? <img src={displayUser.cover} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
         {uploading==='cover' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20"><Loader2 className="w-8 h-8 text-white animate-spin"/></div>}
         {isMine && (<button onClick={() => pickImage('cover')} className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur px-3 py-2 rounded-full border border-white/30 active:scale-90 flex items-center gap-2 text-xs font-bold">{uploading==='cover'? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>} تعديل الغلاف</button>)}
         <div className="absolute -bottom-12 right-6 flex items-end gap-4 z-10">
           <div className="relative">
             <div className="w-24 h-24 lg:w-28 lg:h-28 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden">
-              {user.avatar? <img src={user.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}
+              {displayUser.avatar? <img src={displayUser.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}
               {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
             </div>
+            {/* ✅ النقطة الخضرا الحقيقية */}
+            {liveUser?.reallyOnline && <span className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 rounded-full border-[3px] border-[#050a0a] shadow-[0_0_10px_rgba(34,197,94,0.6)]"></span>}
             {isMine && (<button onClick={() => pickImage('avatar')} className="absolute -bottom-1 -left-1 z-30 bg-white p-2.5 rounded-full active:scale-90 shadow-lg flex items-center justify-center w-9 h-9 border-2 border-[#050a0a]"><Camera className="w-4 h-4 text-black"/></button>)}
           </div>
           <div className="pb-2">
-            <div className="flex items-center gap-2"><h1 className={`text-xl font-black ${getNameColor(user.role)}`}>{user.displayName}</h1><RoleBadge role={user.role}/></div>
-            <p className="text-white/50 text-xs mt-1">@{user.username} • {friendsCount} صديق</p>
+            <div className="flex items-center gap-2"><h1 className={`text-xl font-black ${getNameColor(displayUser.role)}`}>{displayUser.displayName}</h1><RoleBadge role={displayUser.role}/></div>
+            <p className="text-white/50 text-xs mt-1 flex items-center gap-2">
+              @{displayUser.username} • {friendsCount} صديق •
+              <span className={`${liveUser?.reallyOnline? 'text-green-400 font-bold' : 'text-white/40'}`}>
+                {liveUser? getLastSeenText(liveUser.lastSeenMs, liveUser.reallyOnline) : '...'}
+              </span>
+              {liveUser?.reallyOnline && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse inline-block"></span>}
+            </p>
           </div>
         </div>
       </div>
@@ -167,7 +177,7 @@ export default function ProfileWall() {
         </div>
       )}
 
-      {showMsgInput && (<div className="max-w-[600px] mx-auto mt-6 px-3"><div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2"><input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${user.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none text-white"/><button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button><button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4 text-white"/></button></div></div>)}
+      {showMsgInput && (<div className="max-w-[600px] mx-auto mt-6 px-3"><div className="bg-[#122025] border border-cyan-400/30 rounded-2xl p-4 flex gap-2"><input value={firstMessage} onChange={e=>setFirstMessage(e.target.value)} placeholder={`اكتب رسالة لـ ${displayUser.displayName}...`} className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm outline-none text-white"/><button onClick={sendMessageRequest} className="bg-cyan-400 text-black px-5 py-2 rounded-full font-black text-sm">إرسال</button><button onClick={()=>setShowMsgInput(false)} className="bg-white/10 px-3 py-2 rounded-full"><X className="w-4 h-4 text-white"/></button></div></div>)}
 
       <div className="max-w-[600px] mx-auto mt-8 px-3 pb-10">
         <div className="flex bg-white/[0.05] rounded-2xl p-1.5 gap-1.5 border border-white/10">
@@ -177,7 +187,6 @@ export default function ProfileWall() {
         </div>
         <div className="space-y-3 mt-4">{filteredPosts.map((p:any)=><div key={p.id} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4"><p className="text-[15px] text-white/90 whitespace-pre-wrap">{p.content}</p>{p.image && <img src={p.image} className="mt-3 rounded-xl w-full"/>}</div>)}</div>
 
-        {/* ✅ قسم الإعدادات وتسجيل الخروج - زي الفيس */}
         {isMine && (
           <div className="mt-12 border-t border-white/10 pt-6 space-y-3">
             <h3 className="text-[13px] font-bold text-white/40 px-2">الإعدادات</h3>
@@ -190,12 +199,9 @@ export default function ProfileWall() {
                 <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><Shield className="w-5 h-5"/></div><span className="text-sm font-bold">المساعدة والدعم</span></div><HelpCircle className="w-4 h-4 text-white/30"/>
               </button>
             </div>
-
-            {/* زر تسجيل الخروج النهائي - تحت خالص */}
             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/15 text-red-400 border border-red-500/20 py-3.5 rounded-2xl font-black text-[14px] active:scale-[0.98] transition-all">
               <LogOut className="w-5 h-5" /> تسجيل خروج
             </button>
-            <p className="text-center text-[10px] text-white/20 mt-2">Postatee v1.0 • منصة سودانية 🇸🇩</p>
           </div>
         )}
       </div>

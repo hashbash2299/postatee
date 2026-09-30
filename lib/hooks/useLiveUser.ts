@@ -7,7 +7,15 @@ export function useLiveUser(uid: string) {
   useEffect(() => {
     if(!uid) return;
     const unsub = onSnapshot(doc(db, 'users', uid), (snap) => {
-      if(snap.exists()) setUser(snap.data());
+      if(snap.exists()){
+        const data = snap.data();
+        let lastSeenMs = 0;
+        if(data.lastSeen?.toMillis) lastSeenMs = data.lastSeen.toMillis();
+        else if(data.lastSeen?.seconds) lastSeenMs = data.lastSeen.seconds*1000;
+        const diff = Date.now() - lastSeenMs;
+        const reallyOnline = data.isOnline === true && diff < 2*60*1000;
+        setUser({ uid: snap.id,...data, reallyOnline, lastSeenMs });
+      }
     });
     return () => unsub();
   }, [uid]);
