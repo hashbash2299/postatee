@@ -1,12 +1,24 @@
 "use client"
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { doc, updateDoc, arrayUnion, arrayRemove, increment, collection, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { doc, updateDoc, arrayUnion, arrayRemove, increment, collection, addDoc, serverTimestamp, onSnapshot, getDoc } from "firebase/firestore";
 import { Heart, MessageCircle, Share2, Send, CornerDownRight, ThumbsUp } from "lucide-react";
 import { useLiveUser } from "@/lib/hooks/useLiveUser";
 import { RoleBadge, getNameColor } from "./RoleBadge";
 import PostMenu from "./PostMenu";
 import { useRouter } from "next/navigation";
+
+// 🇸🇩 كل الرياكشنات - تقليدية + سودانية
+const ALL_REACTIONS = [
+  { id: "like", label: "أعجبني", emoji: "👍", color: "bg-blue-500" },
+  { id: "love", label: "قلب", emoji: "❤️", color: "bg-red-500" },
+  { id: "haha", label: "هههه", emoji: "😂", color: "bg-yellow-400" },
+  { id: "wow", label: "واو", emoji: "😮", color: "bg-amber-400" },
+  { id: "gudam", label: "قداااام", emoji: "🔥", color: "bg-orange-500" },
+  { id: "kalam", label: "دا الكلام", emoji: "👌", color: "bg-cyan-500" },
+  { id: "zoli", label: "زولي شديد", emoji: "🤙", color: "bg-green-500" },
+  { id: "balaghta", label: "بالغت ياخ", emoji: "😳", color: "bg-purple-500" },
+];
 
 const timeAgo = (post:any) => {
   const ts = post.createdAtMillis || post.created_at;
@@ -100,6 +112,27 @@ function CommentsList({ postId, currentUser, setReplyTo }: any){
 export default function PostCard({ post, currentUser, onHide, onStartEdit, isEditing, editingContent, setEditingContent, onSaveEdit, onCancelEdit, commentText, setCommentText, openComments, setOpenComments }: any){
   const [expanded, setExpanded] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
+  const [showReactions, setShowReactions] = useState(false);
+  const [myReaction, setMyReaction] = useState<string|null>(null);
+
+  // نحسب الرياكشنات
+  const reactions = post.reactions || {};
+  const totalReactions = Object.values(reactions as any).reduce((a:any,b:any)=> a + (b?.length||0), 0) as number;
+  const getCount = (id:string)=> reactions[id]?.length || 0;
+
+  useEffect(()=>{
+    if(!currentUser?.uid) return;
+    for(const key in reactions){
+      if(reactions[key]?.includes(currentUser.uid)){
+        setMyReaction(key);
+        break;
+      }
+    }
+    // للتوافق مع النظام القديم
+    if(!myReaction && post.likes?.includes(currentUser?.uid)){
+      setMyReaction("like");
+    }
+  }, [post.reactions, post.likes, currentUser]);
 
   const createNotification = async (type:'like'|'comment', extraText:string = '') => {
     const postOwnerId = post.authorId || post.uid;
@@ -111,11 +144,42 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
     } catch(e) {}
   };
 
-  const handleLike = async()=>{
-    const ref = doc(db,'posts',post.id);
-    const liked = post.likes?.includes(currentUser.uid);
-    if(liked){ await updateDoc(ref, { likes: arrayRemove(currentUser.uid), likesCount: increment(-1) }); }
-    else { await updateDoc(ref, { likes: arrayUnion(currentUser.uid), likesCount: increment(1) }); await createNotification('like'); }
+  const handleReaction = async (reactionId: string) => {
+    if(!currentUser?.uid) return;
+    const postRef = doc(db,'posts',post.id);
+    const snap = await getDoc(postRef);
+    const data = snap.data() as any;
+    let currentReactions = data.reactions || {};
+
+    // امسح رياكشن الزول القديم كلو
+    for(const key in currentReactions){
+      currentReactions[key] = currentReactions[key].filter((uid:string)=> uid!== currentUser.uid);
+      if(currentReactions[key].length===0) delete currentReactions[key];
+    }
+
+    const isSame = myReaction === reactionId;
+
+    if(isSame){
+      // الغاء
+      setMyReaction(null);
+      await updateDoc(postRef, {
+        reactions: currentReactions,
+        likes: arrayRemove(currentUser.uid),
+        likesCount: increment(post.likes?.includes(currentUser.uid)? -1 : 0)
+      });
+    } else {
+      // جديد
+      if(!currentReactions[reactionId]) currentReactions[reactionId] = [];
+      currentReactions[reactionId].push(currentUser.uid);
+      setMyReaction(reactionId);
+      await updateDoc(postRef, {
+        reactions: currentReactions,
+        likes: reactionId==="like"? arrayUnion(currentUser.uid) : arrayRemove(currentUser.uid),
+        likesCount: reactionId==="like" &&!post.likes?.includes(currentUser.uid)? increment(1) : post.likes?.includes(currentUser.uid) && reactionId!=="like"? increment(-1) : increment(0)
+      });
+      await createNotification('like');
+    }
+    setShowReactions(false);
   };
 
   const handleComment = async()=>{
@@ -136,9 +200,10 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
   const content = post.content || "";
   const isLong = content.length > 200 || content.split('\n').length > 3;
   const isShortPost =!post.image &&!post.video && content.length < 80;
+  const myReactionData = ALL_REACTIONS.find(r=>r.id===myReaction);
 
   return (
-    <div id={`post-${post.id}`} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 overflow-hidden w-full max-w-full">
+    <div id={`post-${post.id}`} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 overflow-hidden w-full max-w-full relative">
       <div className="flex justify-between"><div className="flex gap-3 items-center"><LiveAuthor uid={post.authorId||post.uid} fallbackName={post.authorName} fallbackRole={post.authorRole} fallbackAvatar={post.authorAvatar} size="post" feeling={post.feeling}/><span className="text-[11px] text-white/30">{timeAgo(post)}</span></div><PostMenu post={post} currentUser={currentUser} onHide={onHide} onEdit={onStartEdit}/></div>
 
       {isEditing? (
@@ -153,17 +218,75 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       {post.image && (<div className="mt-3 w-full overflow-hidden rounded-xl max-h-[700px] bg-black border border-white/10"><img src={post.image} alt="post" className="w-full h-auto max-h-[700px] object-cover block" /></div>)}
       {post.video && (<div className="mt-3 w-full overflow-hidden rounded-xl bg-black border border-white/10"><video src={post.video} controls playsInline preload="metadata" className="w-full max-h-[700px] bg-black" /></div>)}
 
-      {(post.likesCount > 0 || post.commentsCount > 0) && (
-        <div className="flex justify-between items-center mt-3 text-[13px] text-white/50">
-          <div className="flex items-center gap-1.5">
-            {post.likesCount > 0 && (<div className="flex items-center gap-1"><div className="w-5 h-5 bg-gradient-to-br from-[#FF3B30] to-[#FF2D55] rounded-full flex items-center justify-center"><Heart className="w-3 h-3 fill-white text-white"/></div><span>{post.likesCount}</span></div>)}
+      {/* عرض العدادات - تقليدي + سوداني */}
+      {(totalReactions > 0 || post.likesCount > 0 || post.commentsCount > 0) && (
+        <div className="mt-3 space-y-2">
+          {totalReactions > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {ALL_REACTIONS.map(r=>{
+                const count = getCount(r.id);
+                if(count===0) return null;
+                const isMine = myReaction===r.id;
+                return (
+                  <div key={r.id} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${isMine? 'bg-[#00E5FF]/20 border-[#00E5FF]/40 text-[#00E5FF]' : 'bg-white/[0.06] border-white/10 text-white/70'}`}>
+                    <span className="text-[14px]">{r.emoji}</span>
+                    <span>{r.label}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${r.color} text-white`}>{count}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          <div className="flex justify-between items-center text-[13px] text-white/50">
+            <div className="flex items-center gap-1.5">
+              {totalReactions>0 && <span>{totalReactions} تفاعل</span>}
+              {post.likesCount>0 && totalReactions===0 && <span>{post.likesCount} إعجاب</span>}
+            </div>
+            <div>{post.commentsCount > 0 && `${post.commentsCount} تعليق`}</div>
           </div>
-          <div>{post.commentsCount > 0 && `${post.commentsCount} تعليق`}</div>
         </div>
       )}
 
-      <div className="flex justify-around mt-2 pt-2 border-t border-white/10">
-        <button onClick={handleLike} className={`flex gap-1.5 text-[14px] items-center font-medium py-1.5 px-4 rounded-lg hover:bg-white/5 flex-1 justify-center ${post.likes?.includes(currentUser?.uid)?'text-[#FF3B30]':'text-white/60'}`}><ThumbsUp className={`w-[18px] h-[18px] ${post.likes?.includes(currentUser?.uid)?'fill-current':''}`}/> أعجبني</button>
+      <div className="flex justify-around mt-2 pt-2 border-t border-white/10 relative">
+        {/* زر الرياكشن الجديد */}
+        <div className="relative flex-1 flex justify-center">
+          <button
+            onClick={()=> setShowReactions(!showReactions)}
+            className={`flex gap-1.5 text-[14px] items-center font-medium py-1.5 px-4 rounded-lg hover:bg-white/5 w-full justify-center transition-colors ${myReaction? 'text-[#00E5FF]' : 'text-white/60'}`}
+          >
+            {myReactionData? (
+              <>
+                <span className="text-[18px]">{myReactionData.emoji}</span>
+                <span className="text-[13px] font-black">{myReactionData.label}</span>
+              </>
+            ) : (
+              <><ThumbsUp className="w-[18px] h-[18px]"/> تفاعل</>
+            )}
+          </button>
+
+          {showReactions && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={()=>setShowReactions(false)}></div>
+              <div className="absolute bottom-[45px] right-1/2 translate-x-1/2 md:right-0 md:translate-x-0 bg-[#1E2D33] border border-white/15 rounded-2xl p-2 shadow-[0_15px_40px_rgba(0,0,0,0.7)] z-50 w-[320px] animate-in fade-in zoom-in-95">
+                <div className="flex justify-between items-center px-2 mb-2">
+                  <p className="text-[10px] text-white/40 font-black">اضغط لتتفاعل</p>
+                  <button onClick={()=>setShowReactions(false)} className="text-white/40 text-[12px]">✕</button>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {ALL_REACTIONS.map(r=>(
+                    <button key={r.id} onClick={()=>handleReaction(r.id)}
+                      className={`flex flex-col items-center gap-1 rounded-xl p-2.5 transition-all hover:scale-105 border ${myReaction===r.id? 'bg-[#00E5FF]/20 border-[#00E5FF] scale-105' : 'bg-white/[0.04] border-white/5 hover:bg-white/10 hover:border-white/10'}`}>
+                      <span className="text-[22px]">{r.emoji}</span>
+                      <span className="text-[9px] font-bold text-white/80 text-center leading-tight">{r.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[8px] text-center text-white/20 mt-2">🇸🇩 تفاعلات سودانية خالصة + تفاعلات عامة</p>
+              </div>
+            </>
+          )}
+        </div>
+
         <button onClick={()=>setOpenComments((p:any)=>({...p,[post.id]:!p[post.id]}))} className="flex gap-1.5 text-[14px] text-white/60 items-center font-medium py-1.5 px-4 rounded-lg hover:bg-white/5 flex-1 justify-center"><MessageCircle className="w-[18px] h-[18px]"/> تعليق</button>
         <button className="flex gap-1.5 text-[14px] text-white/60 items-center font-medium py-1.5 px-4 rounded-lg hover:bg-white/5 flex-1 justify-center"><Share2 className="w-[18px] h-[18px]"/> مشاركة</button>
       </div>
