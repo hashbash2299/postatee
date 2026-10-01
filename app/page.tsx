@@ -58,44 +58,13 @@ export default function Page(){
     return () => unsub();
   }, []);
 
-  const onlineUsers = allUsers.filter((u:any) => u.isOnline);
-  const offlineUsers = allUsers.filter((u:any) =>!u.isOnline);
-
   if (loading) return <div className="min-h-screen bg-[#0B1418] flex items-center justify-center text-cyan-400">أهلا بيك في Postatee</div>;
 
   return (
     <div className="min-h-screen bg-[#0B1418] text-white overflow-x-hidden" dir="rtl">
-      <div className="flex max-w-[1600px] mx-auto">
-        {/* سايدبار ثابت */}
-        <aside className="hidden lg:flex w-[300px] bg-[#122025] flex-col p-4 border-l border-[#1A2E35] h-[calc(100vh-88px)] sticky top-[88px] overflow-y-auto">
-          <h3 className="font-bold mb-4">جهات الاتصال ({allUsers.length})</h3>
-          <div className="mb-4">
-            <p className="text-[11px] font-bold text-green-400 mb-2">● متصلون ({onlineUsers.length})</p>
-            <div className="flex flex-col gap-1">
-              {onlineUsers.map((u:any) => (
-                <Link href={`/profile/${u.uid || u.id}`} key={u.id} className="flex items-center gap-3 p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-green-500/10">
-                  <div className="relative"><img src={u.photoURL || `https://i.pravatar.cc/100?u=${u.id}`} className="w-9 h-9 rounded-full object-cover" /><div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-[#122025]"></div></div>
-                  <div className="flex-1 min-w-0"><p className="text-sm font-bold truncate">{u.displayName || u.email}</p><p className="text-[11px] text-green-400 truncate">متصل الآن</p></div>
-                </Link>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-[11px] font-bold text-white/40 mb-2">○ البقية</p>
-            <div className="flex flex-col gap-1">
-              {offlineUsers.map((u:any) => (
-                <Link href={`/profile/${u.uid || u.id}`} key={u.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/10">
-                  <div className="relative"><img src={u.photoURL || `https://i.pravatar.cc/100?u=${u.id}`} className="w-9 h-9 rounded-full object-cover" /><div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-gray-500 border-2 border-[#122025]"></div></div>
-                  <div className="flex-1 min-w-0"><p className="text-sm font-bold truncate">{u.displayName || u.email}</p><p className="text-[11px] text-white/50 truncate">غير متصل</p></div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        {/* الفيد */}
+      <div className="flex justify-center max-w-[1600px] mx-auto">
+        {/* الفيد - بقى في النص */}
         <main className="flex-1 max-w-[720px] mx-auto w-full pb-[80px] lg:pb-4">
-          {/* ستوريز بتسکرول عادي */}
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 p-4 border-b lg:border border-[#1A2E35] overflow-hidden"><Stories currentUser={currentUser} /></div>
 
           <div className="mx-4 mt-3">
@@ -115,29 +84,25 @@ export default function Page(){
             </Link>
           </div>
 
+          <Link href="/chat-rooms">
+            <div className="mt-3 bg-[#122025] border border-[#1E3A42] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E676] transition-colors mx-4 lg:mx-0">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-[#00E676]/20 rounded-xl flex items-center justify-center text-xl">💬</div>
+                <div>
+                  <h3 className="font-black text-[15px]">غرف الدردشات العامة</h3>
+                  <p className="text-[11px] text-white/50">بنات • الجزيرة • دارفور • كردفان</p>
+                </div>
+              </div>
+              <div className="bg-[#00E676] text-black text-[12px] font-black px-4 py-2 rounded-full">ادخل</div>
+            </div>
+          </Link>
 
-<Link href="/chat-rooms">
-  <div className="mt-3 bg-[#122025] border border-[#1E3A42] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E676] transition-colors">
-    <div className="flex items-center gap-3">
-      <div className="w-11 h-11 bg-[#00E676]/20 rounded-xl flex items-center justify-center text-xl">💬</div>
-      <div>
-        <h3 className="font-black text-[15px]">غرف الدردشات العامة</h3>
-        <p className="text-[11px] text-white/50">بنات • الجزيرة • دارفور • كردفان</p>
-      </div>
-    </div>
-    <div className="bg-[#00E676] text-black text-[12px] font-black px-4 py-2 rounded-full">ادخل</div>
-  </div>
-</Link>
-
-
-          {/* كرييت بوست - ثابت زي فيسبوك */}
           <div className="sticky top-[88px] z-[20] bg-[#0B1418]/80 backdrop-blur-xl px-0 lg:px-4 py-2 mt-3">
             <div className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
               <CreatePost currentUser={currentUser} />
             </div>
           </div>
 
-          {/* البوستات - بتطلع تحت الكرييت بوست */}
           <div className="space-y-2 px-0 lg:px-4 mt-3">
             {posts.filter(p=>!hiddenPosts.includes(p.id)).map(post=>(
               <div key={post.id} id={`post-${post.id}`} className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] overflow-hidden">
@@ -160,7 +125,6 @@ export default function Page(){
             ))}
           </div>
         </main>
-        <div className="hidden lg:block w-[20px]"></div>
       </div>
     </div>
   )
