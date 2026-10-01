@@ -53,7 +53,17 @@ export default function Page(){
     return () => unsub();
   }, []);
 
-  const trendingPosts = [...posts].sort((a:any,b:any)=>(b.likes?.length||0)-(a.likes?.length||0)).slice(0,5);
+  // 🔥 الخوارزمية الذكية للتريند - لايك + تعليق + مشاركة + عمر المنشور
+  const trendingPosts = [...posts].map((p:any)=>{
+    const likes = p.likes?.length || 0;
+    const comments = p.commentsCount || p.comments?.length || 0;
+    const shares = p.shares || 0;
+    const created = p.createdAtMillis || p.created_at?.seconds*1000 || p.created_at?.toDate?.()?.getTime() || Date.now();
+    const hoursAgo = (Date.now() - created) / (1000*60*60);
+    const recencyBonus = hoursAgo < 6? 25 : hoursAgo < 24? 15 : hoursAgo < 72? 5 : 0;
+    const score = (likes*1) + (comments*3) + (shares*5) + recencyBonus;
+    return {...p, _score: score };
+  }).sort((a:any,b:any)=>b._score - a._score).slice(0,5);
 
   const scrollToPost = (id:string) => {
     const el = document.getElementById(`post-${id}`);
@@ -76,7 +86,7 @@ export default function Page(){
               {trendingPosts.map((p:any,i)=>(
                 <button key={p.id} onClick={()=>scrollToPost(p.id)} className="block text-right hover:bg-white/5 p-2 rounded-xl w-full">
                   <p className="text-sm font-bold truncate">{i+1}. {p.content?.slice(0,40) || 'منشور رائج'}...</p>
-                  <p className="text-[11px] text-white/50">{p.likes?.length||0} تفاعل • {p.commentsCount||0} تعليق</p>
+                  <p className="text-[11px] text-white/50">🔥 {p._score} نقطة • {p.likes?.length||0} تفاعل</p>
                 </button>
               ))}
             </div>
@@ -114,7 +124,6 @@ export default function Page(){
             <div className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"><CreatePost currentUser={currentUser} /></div>
           </div>
 
-          {/* 🔥 ريلز تريند - للجوال */}
           <div className="lg:hidden mt-3 px-2">
             <div className="flex items-center justify-between px-2 mb-2">
               <h3 className="font-black text-[15px]">🔥 تريند السودان</h3>
@@ -132,7 +141,7 @@ export default function Page(){
                   <div className="absolute top-2 left-2 w-6 h-6 bg-[#00E5FF] text-black rounded-full flex items-center justify-center font-black text-[12px]">{i+1}</div>
                   <div className="absolute bottom-0 p-2 w-full">
                     <p className="text-[11px] font-bold line-clamp-2 text-white leading-tight">{p.content?.slice(0,45) || 'منشور رائج'}..</p>
-                    <p className="text-[9px] text-white/60 mt-1">🔥 {p.likes?.length||0} تفاعل</p>
+                    <p className="text-[9px] text-white/60 mt-1">🔥 {p._score} نقطة</p>
                   </div>
                 </button>
               ))}
