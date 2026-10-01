@@ -10,6 +10,7 @@ export default function PrivacyPage() {
       <ul className="list-disc pr-6 space-y-2">
         <li>معلومات تقدمها انت طوعاً مثل اسمك وايميلك عند التواصل معنا عبر صفحة اتصل بنا.</li>
         <li>معلومات تلقائية مثل عنوان IP، نوع المتصفح، والصفحات التي تزورها، عبر Google Analytics.</li>
+        <li>نحن منصة تواصل اجتماعي، قد نجمع معلومات مثل اسمك، بريدك، وما تنشره من محتوى لتحسين تجربتك.</li>
       </ul>
 
       <h2 className="text-xl font-bold mt-8 mb-3">2. ملفات تعريف الارتباط (Cookies)</h2>

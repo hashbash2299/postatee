@@ -1,27 +1,35 @@
 export default function AboutPage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12" dir="rtl">
-      <h1 className="text-3xl font-bold text-blue-800 mb-6">من نحن - بوستاتي للوظائف</h1>
-      
-      <p className="text-gray-700 leading-8 mb-4">
-        مرحباً بكم في <span className="font-bold">بوستاتي Postatee</span>،  المنصة الأولى للباحثين عن عمل في السودان والمملكة العربية السعوديةوعدد من الدول الاخرى.
-      </p>
-      <p className="text-gray-700 leading-8 mb-6">
-        انطلقت فكرة بوستاتي في عام 2026 بهدف التواصل الاجتماعي وحل مشكلة تشتت الوظائف. نحن نجمع لكم الفرص من مصادرها الرسمية والموثوقة في مكان واحد، بشكل يومي ومجاني 100%.
-      </p>
+    <div className="max-w-4xl mx-auto px-4 py-12" dir="rtl">
+      <h1 className="text-4xl font-bold text-white mb-3">من نحن - بوستاتي</h1>
+      <p className="text-gray-400 mb-8">منصة سودانية للتواصل والمشاركة</p>
 
-      <h2 className="text-xl font-bold mt-8 mb-3">ماذا نقدم؟</h2>
-      <ul className="space-y-2">
-        <li className="bg-blue-50 p-3 rounded-lg">✅ تواصل اجتماعي ونشر يومي لأحدث الوظائف الحكومية والخاصة</li>
-        <li className="bg-blue-50 p-3 rounded-lg">✅ وظائف للسودانيين في الخليج وخاصة السعودية</li>
-        <li className="bg-blue-50 p-3 rounded-lg">✅ وظائف للخريجين وبدون خبرة</li>
-        <li className="bg-blue-50 p-3 rounded-lg">✅ نصائح لكتابة السيرة الذاتية واجتياز المقابلات</li>
-      </ul>
+      <div className="bg-[#132028] border border-white/10 p-6 rounded-xl mb-6">
+        <h2 className="text-2xl font-bold text-white mb-4">رسالتنا 🎯</h2>
+        <p className="text-gray-300 leading-8">
+          بوستاتي Postatee هي منصة تواصل اجتماعي سودانية، انشأناها عشان ندي مساحة حرة وآمنة للسودانيين 
+          يشاركو أفكارهم، بوستاتهم، صورهم، ويتواصلو مع بعض بدون قيود المنصات الكبيرة.
+          هدفنا نلم شمل المجتمع السوداني في مكان واحد، باللهجة السودانية وبطريقة قريبة مننا.
+        </p>
+      </div>
 
-      <h2 className="text-xl font-bold mt-8 mb-3">رسالتنا</h2>
-      <p className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-        نحن <strong>لسنا شركة توظيف</strong> ولا نتقاضى أي رسوم من الباحثين عن عمل. نحن منصةإجتماعية إعلامية وسيطة فقط.
-      </p>
+      <div className="bg-[#132028] border border-white/10 p-6 rounded-xl mb-6">
+        <h2 className="text-2xl font-bold text-white mb-4">ماذا نقدم؟ 💬</h2>
+        <ul className="list-disc pr-6 space-y-3 text-gray-300">
+          <li>نشر بوستات نصية، صور وفيديوهات بسهولة.</li>
+          <li>التفاعل باللايكات والتعليقات والمشاركة.</li>
+          <li>متابعة الأصدقاء والمبدعين السودانيين.</li>
+          <li>مجتمع آمن، نحترم الخصوصية ونرفض خطاب الكراهية.</li>
+        </ul>
+      </div>
+
+      <div className="bg-[#132028] border border-white/10 p-6 rounded-xl">
+        <h2 className="text-2xl font-bold text-white mb-4">لماذا بوستاتي؟ ⭐</h2>
+        <p className="text-gray-300 leading-8">
+          لأننا منكم ولكم. منصة سودانية 100%، مصممة لتناسب انترنتنا وثقافتنا.
+          لا نبيع بياناتك، لا نزعجك بإعلانات كثيرة، هدفنا مجتمع نضيف ومحترم.
+        </p>
+      </div>
     </div>
   )
 }
