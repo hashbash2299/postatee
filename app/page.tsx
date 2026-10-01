@@ -100,6 +100,7 @@ export default function Page(){
             </div>
           </Link>
 
+
           {/* هاشتاقات للجوال - شريط افقي */}
           <div className="lg:hidden mx-4 mt-3 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
             {SUDANESE_HASHTAGS.map(h=><Link key={h} href={`/hashtag/${h.replace('#','')}`} className="whitespace-nowrap bg-[#122025] border border-[#1A2E35] px-3 py-1.5 rounded-full text-[13px] font-bold text-[#00E5FF]">{h}</Link>)}
@@ -116,6 +117,45 @@ export default function Page(){
             ))}
           </div>
         </main>
+
+{/* 🔥 تريند السودان - واجهة ريلز للجوال */}
+<div className="lg:hidden mt-3 px-2">
+  <div className="flex items-center justify-between px-2 mb-2">
+    <h3 className="font-black text-[15px]">🔥 تريند السودان</h3>
+    <Link href="/trending" className="text-[#00E5FF] text-[11px] font-bold">عرض الكل ←</Link>
+  </div>
+
+  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 px-1" style={{scrollSnapType:'x mandatory'}}>
+    {trendingPosts.map((p:any,i)=>(
+      <Link
+        key={p.id}
+        href={`#post-${p.id}`}
+        className="relative min-w-[110px] w-[110px] h-[180px] rounded-2xl overflow-hidden bg-[#122025] border border-white/10 flex-shrink-0"
+        style={{scrollSnapAlign:'start'}}
+      >
+        {/* صورة خلفية */}
+        <img src={p.imageUrl || p.photoURL || `https://picsum.photos/seed/${p.id}/200/300`} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
+
+        {/* رقم التريند */}
+        <div className="absolute top-2 left-2 w-6 h-6 bg-[#00E5FF] text-black rounded-full flex items-center justify-center font-black text-[12px]">{i+1}</div>
+
+        {/* نص المنشور */}
+        <div className="absolute bottom-0 p-2 w-full">
+          <p className="text-[11px] font-bold line-clamp-2 text-white leading-tight">{p.content?.slice(0,45) || 'منشور رائج'}..</p>
+          <p className="text-[9px] text-white/60 mt-1">🔥 {p.likes?.length||0} تفاعل</p>
+        </div>
+      </Link>
+    ))}
+    {trendingPosts.length===0 && (
+      <div className="min-w-[110px] h-[180px] rounded-2xl bg-[#122025] border border-dashed border-white/20 flex items-center justify-center">
+        <p className="text-[11px] text-white/40">لا يوجد تريند</p>
+      </div>
+    )}
+  </div>
+</div>
+
+
 
         {/* سايدبار يمين - هاشتاقات سودانية */}
         <aside className="hidden lg:flex w-[320px] flex-col gap-4 sticky top-[88px] h-[calc(100vh-88px)] overflow-y-auto p-2">
