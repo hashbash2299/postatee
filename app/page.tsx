@@ -5,7 +5,7 @@ import { collection, onSnapshot, doc, getDoc, updateDoc, setDoc } from "firebase
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Video, Sparkles, TrendingUp, Hash } from "lucide-react";
+import { Video, Sparkles, Hash } from "lucide-react";
 import CreatePost from "../components/feed/CreatePost";
 import PostCard from "../components/feed/PostCard";
 import Stories from "../components/feed/Stories";
@@ -60,7 +60,7 @@ export default function Page(){
     <div className="min-h-screen bg-[#0B1418] text-white overflow-x-hidden" dir="rtl">
       <div className="flex max-w-[1600px] mx-auto gap-4">
 
-        {/* سايدبار شمال - تريند السودان */}
+        {/* سايدبار شمال - تريند السودان للابتوب فقط */}
         <aside className="hidden lg:flex w-[300px] flex-col gap-4 sticky top-[88px] h-[calc(100vh-88px)] overflow-y-auto p-2">
           <div className="bg-[#122025] rounded-2xl border border-[#1A2E35] p-4">
             <h3 className="font-black text-[18px] flex items-center gap-2 mb-4"><span className="text-xl">🔥</span> تريند السودان</h3>
@@ -80,6 +80,7 @@ export default function Page(){
         {/* الفيد */}
         <main className="flex-1 max-w-[720px] mx-auto w-full pb-[80px] lg:pb-4">
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 p-4 border-b lg:border border-[#1A2E35] overflow-hidden"><Stories currentUser={currentUser} /></div>
+
           <div className="mx-4 mt-3">
             <Link href="/video-maker">
               <div className="bg-gradient-to-r from-[#FFD700] via-[#FFC700] to-[#FFB000] rounded-2xl p-[2px] cursor-pointer hover:scale-[1.01] transition-all">
@@ -93,6 +94,7 @@ export default function Page(){
               </div>
             </Link>
           </div>
+
           <Link href="/chat-rooms">
             <div className="mt-3 bg-[#122025] border border-[#1E3A42] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E676] transition-colors mx-4 lg:mx-0">
               <div className="flex items-center gap-3"><div className="w-11 h-11 bg-[#00E676]/20 rounded-xl flex items-center justify-center text-xl">💬</div><div><h3 className="font-black text-[15px]">غرف الدردشات العامة</h3><p className="text-[11px] text-white/50">بنات • الجزيرة • دارفور • كردفان</p></div></div>
@@ -100,15 +102,47 @@ export default function Page(){
             </div>
           </Link>
 
-
           {/* هاشتاقات للجوال - شريط افقي */}
           <div className="lg:hidden mx-4 mt-3 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
             {SUDANESE_HASHTAGS.map(h=><Link key={h} href={`/hashtag/${h.replace('#','')}`} className="whitespace-nowrap bg-[#122025] border border-[#1A2E35] px-3 py-1.5 rounded-full text-[13px] font-bold text-[#00E5FF]">{h}</Link>)}
           </div>
 
+          {/* انشاء منشور */}
           <div className="sticky top-[88px] z-[20] bg-[#0B1418]/80 backdrop-blur-xl px-0 lg:px-4 py-2 mt-3">
             <div className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"><CreatePost currentUser={currentUser} /></div>
           </div>
+
+          {/* 🔥 تريند السودان - واجهة ريلز للجوال - هنا مكانو الصح */}
+          <div className="lg:hidden mt-3 px-2">
+            <div className="flex items-center justify-between px-2 mb-2">
+              <h3 className="font-black text-[15px]">🔥 تريند السودان</h3>
+              <Link href="/trending" className="text-[#00E5FF] text-[11px] font-bold">عرض الكل ←</Link>
+            </div>
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 px-1">
+              {trendingPosts.map((p:any,i)=>(
+                <Link
+                  key={p.id}
+                  href={`#post-${p.id}`}
+                  className="relative min-w-[110px] w-[110px] h-[180px] rounded-2xl overflow-hidden bg-[#122025] border border-white/10 flex-shrink-0"
+                >
+                  <img src={p.imageUrl || p.mediaUrl || p.photoURL || `https://picsum.photos/seed/${p.id}/200/300`} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
+                  <div className="absolute top-2 left-2 w-6 h-6 bg-[#00E5FF] text-black rounded-full flex items-center justify-center font-black text-[12px]">{i+1}</div>
+                  <div className="absolute bottom-0 p-2 w-full">
+                    <p className="text-[11px] font-bold line-clamp-2 text-white leading-tight">{p.content?.slice(0,45) || 'منشور رائج'}..</p>
+                    <p className="text-[9px] text-white/60 mt-1">🔥 {p.likes?.length||0} تفاعل</p>
+                  </div>
+                </Link>
+              ))}
+              {trendingPosts.length===0 && (
+                <div className="min-w-[110px] h-[180px] rounded-2xl bg-[#122025] border border-dashed border-white/20 flex items-center justify-center">
+                  <p className="text-[11px] text-white/40">لا يوجد تريند</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* البوستات */}
           <div className="space-y-2 px-0 lg:px-4 mt-3">
             {posts.filter(p=>!hiddenPosts.includes(p.id)).map(post=>(
               <div key={post.id} id={`post-${post.id}`} className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] overflow-hidden">
@@ -118,46 +152,7 @@ export default function Page(){
           </div>
         </main>
 
-{/* 🔥 تريند السودان - واجهة ريلز للجوال */}
-<div className="lg:hidden mt-3 px-2">
-  <div className="flex items-center justify-between px-2 mb-2">
-    <h3 className="font-black text-[15px]">🔥 تريند السودان</h3>
-    <Link href="/trending" className="text-[#00E5FF] text-[11px] font-bold">عرض الكل ←</Link>
-  </div>
-
-  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 px-1" style={{scrollSnapType:'x mandatory'}}>
-    {trendingPosts.map((p:any,i)=>(
-      <Link
-        key={p.id}
-        href={`#post-${p.id}`}
-        className="relative min-w-[110px] w-[110px] h-[180px] rounded-2xl overflow-hidden bg-[#122025] border border-white/10 flex-shrink-0"
-        style={{scrollSnapAlign:'start'}}
-      >
-        {/* صورة خلفية */}
-        <img src={p.imageUrl || p.photoURL || `https://picsum.photos/seed/${p.id}/200/300`} className="absolute inset-0 w-full h-full object-cover opacity-60" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
-
-        {/* رقم التريند */}
-        <div className="absolute top-2 left-2 w-6 h-6 bg-[#00E5FF] text-black rounded-full flex items-center justify-center font-black text-[12px]">{i+1}</div>
-
-        {/* نص المنشور */}
-        <div className="absolute bottom-0 p-2 w-full">
-          <p className="text-[11px] font-bold line-clamp-2 text-white leading-tight">{p.content?.slice(0,45) || 'منشور رائج'}..</p>
-          <p className="text-[9px] text-white/60 mt-1">🔥 {p.likes?.length||0} تفاعل</p>
-        </div>
-      </Link>
-    ))}
-    {trendingPosts.length===0 && (
-      <div className="min-w-[110px] h-[180px] rounded-2xl bg-[#122025] border border-dashed border-white/20 flex items-center justify-center">
-        <p className="text-[11px] text-white/40">لا يوجد تريند</p>
-      </div>
-    )}
-  </div>
-</div>
-
-
-
-        {/* سايدبار يمين - هاشتاقات سودانية */}
+        {/* سايدبار يمين - هاشتاقات سودانية للابتوب */}
         <aside className="hidden lg:flex w-[320px] flex-col gap-4 sticky top-[88px] h-[calc(100vh-88px)] overflow-y-auto p-2">
           <div className="bg-[#122025] rounded-2xl border border-[#1A2E35] p-4">
             <h3 className="font-black text-[18px] flex items-center gap-2 mb-4"><Hash className="w-5 h-5 text-[#00E5FF]" /> هاشتاقات سودانية</h3>
@@ -167,10 +162,6 @@ export default function Page(){
               ))}
             </div>
             <Link href="/hashtags" className="block mt-4 text-center text-white/60 text-sm hover:text-white">عرض كل الهاشتاقات</Link>
-          </div>
-          <div className="bg-[#122025] rounded-2xl border border-[#1A2E35] p-4">
-            <h3 className="font-bold text-sm mb-2">💡 منصوح لك</h3>
-            <p className="text-[12px] text-white/50">تابع هاشتاق #حكاية_سودانية عشان تظهر قصصك في التريند</p>
           </div>
         </aside>
 
