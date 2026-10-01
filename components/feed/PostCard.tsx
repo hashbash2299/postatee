@@ -8,15 +8,15 @@ import { RoleBadge, getNameColor } from "./RoleBadge";
 import PostMenu from "./PostMenu";
 import { useRouter } from "next/navigation";
 
-// 🇸🇩 كل الرياكشنات - تقليدية + سودانية
+// 🇸🇩 قداااام أول واحدة - أهم واحدة
 const ALL_REACTIONS = [
-  { id: "like", label: "أعجبني", emoji: "👍", color: "bg-blue-500" },
-  { id: "love", label: "قلب", emoji: "❤️", color: "bg-red-500" },
-  { id: "haha", label: "هههه", emoji: "😂", color: "bg-yellow-400" },
-  { id: "wow", label: "واو", emoji: "😮", color: "bg-amber-400" },
   { id: "gudam", label: "قداااام", emoji: "🔥", color: "bg-orange-500" },
+  { id: "love", label: "قلب", emoji: "❤️", color: "bg-red-500" },
+  { id: "like", label: "أعجبني", emoji: "👍", color: "bg-blue-500" },
+  { id: "haha", label: "ضحكتني شديد", emoji: "😂", color: "bg-yellow-400" },
   { id: "kalam", label: "دا الكلام", emoji: "👌", color: "bg-cyan-500" },
   { id: "zoli", label: "زولي شديد", emoji: "🤙", color: "bg-green-500" },
+  { id: "wow", label: "واو", emoji: "😮", color: "bg-amber-400" },
   { id: "balaghta", label: "بالغت ياخ", emoji: "😳", color: "bg-purple-500" },
 ];
 
@@ -115,7 +115,6 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
   const [showReactions, setShowReactions] = useState(false);
   const [myReaction, setMyReaction] = useState<string|null>(null);
 
-  // نحسب الرياكشنات
   const reactions = post.reactions || {};
   const totalReactions = Object.values(reactions as any).reduce((a:any,b:any)=> a + (b?.length||0), 0) as number;
   const getCount = (id:string)=> reactions[id]?.length || 0;
@@ -128,7 +127,6 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
         break;
       }
     }
-    // للتوافق مع النظام القديم
     if(!myReaction && post.likes?.includes(currentUser?.uid)){
       setMyReaction("like");
     }
@@ -150,17 +148,12 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
     const snap = await getDoc(postRef);
     const data = snap.data() as any;
     let currentReactions = data.reactions || {};
-
-    // امسح رياكشن الزول القديم كلو
     for(const key in currentReactions){
       currentReactions[key] = currentReactions[key].filter((uid:string)=> uid!== currentUser.uid);
       if(currentReactions[key].length===0) delete currentReactions[key];
     }
-
     const isSame = myReaction === reactionId;
-
     if(isSame){
-      // الغاء
       setMyReaction(null);
       await updateDoc(postRef, {
         reactions: currentReactions,
@@ -168,7 +161,6 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
         likesCount: increment(post.likes?.includes(currentUser.uid)? -1 : 0)
       });
     } else {
-      // جديد
       if(!currentReactions[reactionId]) currentReactions[reactionId] = [];
       currentReactions[reactionId].push(currentUser.uid);
       setMyReaction(reactionId);
@@ -203,7 +195,7 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
   const myReactionData = ALL_REACTIONS.find(r=>r.id===myReaction);
 
   return (
-    <div id={`post-${post.id}`} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 overflow-hidden w-full max-w-full relative">
+    <div id={`post-${post.id}`} className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 w-full max-w-full overflow-visible relative">
       <div className="flex justify-between"><div className="flex gap-3 items-center"><LiveAuthor uid={post.authorId||post.uid} fallbackName={post.authorName} fallbackRole={post.authorRole} fallbackAvatar={post.authorAvatar} size="post" feeling={post.feeling}/><span className="text-[11px] text-white/30">{timeAgo(post)}</span></div><PostMenu post={post} currentUser={currentUser} onHide={onHide} onEdit={onStartEdit}/></div>
 
       {isEditing? (
@@ -218,7 +210,6 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       {post.image && (<div className="mt-3 w-full overflow-hidden rounded-xl max-h-[700px] bg-black border border-white/10"><img src={post.image} alt="post" className="w-full h-auto max-h-[700px] object-cover block" /></div>)}
       {post.video && (<div className="mt-3 w-full overflow-hidden rounded-xl bg-black border border-white/10"><video src={post.video} controls playsInline preload="metadata" className="w-full max-h-[700px] bg-black" /></div>)}
 
-      {/* عرض العدادات - تقليدي + سوداني */}
       {(totalReactions > 0 || post.likesCount > 0 || post.commentsCount > 0) && (
         <div className="mt-3 space-y-2">
           {totalReactions > 0 && (
@@ -248,17 +239,13 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
       )}
 
       <div className="flex justify-around mt-2 pt-2 border-t border-white/10 relative">
-        {/* زر الرياكشن الجديد */}
         <div className="relative flex-1 flex justify-center">
           <button
             onClick={()=> setShowReactions(!showReactions)}
             className={`flex gap-1.5 text-[14px] items-center font-medium py-1.5 px-4 rounded-lg hover:bg-white/5 w-full justify-center transition-colors ${myReaction? 'text-[#00E5FF]' : 'text-white/60'}`}
           >
             {myReactionData? (
-              <>
-                <span className="text-[18px]">{myReactionData.emoji}</span>
-                <span className="text-[13px] font-black">{myReactionData.label}</span>
-              </>
+              <><span className="text-[18px]">{myReactionData.emoji}</span><span className="text-[13px] font-black">{myReactionData.label}</span></>
             ) : (
               <><ThumbsUp className="w-[18px] h-[18px]"/> تفاعل</>
             )}
@@ -266,22 +253,22 @@ export default function PostCard({ post, currentUser, onHide, onStartEdit, isEdi
 
           {showReactions && (
             <>
-              <div className="fixed inset-0 z-40" onClick={()=>setShowReactions(false)}></div>
-              <div className="absolute bottom-[45px] right-1/2 translate-x-1/2 md:right-0 md:translate-x-0 bg-[#1E2D33] border border-white/15 rounded-2xl p-2 shadow-[0_15px_40px_rgba(0,0,0,0.7)] z-50 w-[320px] animate-in fade-in zoom-in-95">
-                <div className="flex justify-between items-center px-2 mb-2">
-                  <p className="text-[10px] text-white/40 font-black">اضغط لتتفاعل</p>
-                  <button onClick={()=>setShowReactions(false)} className="text-white/40 text-[12px]">✕</button>
+              <div className="fixed inset-0 z-[90]" onClick={()=>setShowReactions(false)}></div>
+              {/* حل مشكلة القص - fixed في الجوال */}
+              <div className="fixed md:absolute bottom-[100px] md:bottom-[50px] left-1/2 md:left-0 md:right-auto -translate-x-1/2 md:translate-x-0 bg-[#1E2D33]/95 backdrop-blur-xl border border-white/20 rounded-[22px] p-3 shadow-[0_20px_60px_rgba(0,0,0,0.9)] z-[100] w-[90vw] max-w-[300px]">
+                <div className="flex justify-between items-center px-1 mb-2">
+                  <p className="text-[11px] text-white/50 font-black">اختار تفاعلك 🇸🇩</p>
+                  <button onClick={()=>setShowReactions(false)} className="w-6 h-6 bg-white/10 rounded-full flex items-center justify-center text-white/60">✕</button>
                 </div>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-4 gap-2">
                   {ALL_REACTIONS.map(r=>(
                     <button key={r.id} onClick={()=>handleReaction(r.id)}
-                      className={`flex flex-col items-center gap-1 rounded-xl p-2.5 transition-all hover:scale-105 border ${myReaction===r.id? 'bg-[#00E5FF]/20 border-[#00E5FF] scale-105' : 'bg-white/[0.04] border-white/5 hover:bg-white/10 hover:border-white/10'}`}>
-                      <span className="text-[22px]">{r.emoji}</span>
-                      <span className="text-[9px] font-bold text-white/80 text-center leading-tight">{r.label}</span>
+                      className={`flex flex-col items-center gap-1 rounded-2xl py-3 px-1 transition-all active:scale-90 border ${myReaction===r.id? 'bg-[#00E5FF]/25 border-[#00E5FF] scale-105' : 'bg-white/[0.06] border-white/10 hover:bg-white/10'}`}>
+                      <span className="text-[28px] leading-none">{r.emoji}</span>
+                      <span className="text-[10px] font-black text-white/90 text-center leading-tight">{r.label}</span>
                     </button>
                   ))}
                 </div>
-                <p className="text-[8px] text-center text-white/20 mt-2">🇸🇩 تفاعلات سودانية خالصة + تفاعلات عامة</p>
               </div>
             </>
           )}
