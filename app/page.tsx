@@ -5,7 +5,7 @@ import { collection, onSnapshot, doc, getDoc, updateDoc, setDoc } from "firebase
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Video, Sparkles, Hash } from "lucide-react";
+import { Video, Sparkles, Hash, Megaphone } from "lucide-react";
 import CreatePost from "../components/feed/CreatePost";
 import PostCard from "../components/feed/PostCard";
 import Stories from "../components/feed/Stories";
@@ -53,7 +53,6 @@ export default function Page(){
     return () => unsub();
   }, []);
 
-  // 🔥 الخوارزمية الذكية للتريند - لايك + تعليق + مشاركة + عمر المنشور
   const trendingPosts = [...posts].map((p:any)=>{
     const likes = p.likes?.length || 0;
     const comments = p.commentsCount || p.comments?.length || 0;
@@ -113,6 +112,22 @@ export default function Page(){
             <div className="mt-3 bg-[#122025] border border-[#1E3A42] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E676] transition-colors mx-4 lg:mx-0">
               <div className="flex items-center gap-3"><div className="w-11 h-11 bg-[#00E676]/20 rounded-xl flex items-center justify-center text-xl">💬</div><div><h3 className="font-black text-[15px]">غرف الدردشات العامة</h3><p className="text-[11px] text-white/50">بنات • الجزيرة • دارفور • كردفان</p></div></div>
               <div className="bg-[#00E676] text-black text-[12px] font-black px-4 py-2 rounded-full">ادخل</div>
+            </div>
+          </Link>
+
+          {/* ✅ بطاقة الإعلانات الجديدة - هنا الإضافة */}
+          <Link href="/ads">
+            <div className="mt-3 mx-4 lg:mx-0 bg-[#122025] border border-[#2A4A5A] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E5FF] transition-all group">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-[#00E5FF]/20 rounded-xl flex items-center justify-center group-hover:bg-[#00E5FF]/30 transition-colors">
+                  <Megaphone className="w-6 h-6 text-[#00E5FF]" />
+                </div>
+                <div>
+                  <h3 className="font-black text-[15px] flex items-center gap-2">جدار الإعلانات <span className="bg-[#00E5FF] text-black text-[9px] px-2 py-0.5 rounded-full">جديد</span></h3>
+                  <p className="text-[11px] text-white/50">بنرات 100% • 50% • 25% • مع حذف ومدة</p>
+                </div>
+              </div>
+              <div className="bg-white text-black text-[12px] font-black px-4 py-2 rounded-full">إدارة</div>
             </div>
           </Link>
 
