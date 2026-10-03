@@ -95,6 +95,7 @@ export default function Page(){
 
         <main className="flex-1 max-w-[720px] mx-auto w-full pb-[80px] lg:pb-4">
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 p-4 border-b lg:border border-[#1A2E35] overflow-hidden"><Stories currentUser={currentUser} /></div>
+
           <div className="mx-4 mt-3">
             <Link href="/video-maker">
               <div className="bg-gradient-to-r from-[#FFD700] via-[#FFC700] to-[#FFB000] rounded-2xl p-[2px] cursor-pointer hover:scale-[1.01] transition-all">
@@ -109,15 +110,8 @@ export default function Page(){
             </Link>
           </div>
 
-          {/* ✅ بطاقة العاب بوستاتي - مصححة */}
           <div className="mt-3 mx-4 lg:mx-0">
             <Link href="/games" className="block bg-gradient-to-r from-[#FFD700] to-[#FFA500] p-4 rounded-[20px] border border-black/10 hover:scale-[1.01] transition-all shadow-[0_8px_20px_rgba(255,215,0,0.25)]">
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-2xl">🎮</div>
-                <div className="flex-1">
-                         {/* ✅ العاب بوستاتي */}
-          <div className="mt-3 mx-4 lg:mx-0">
-            <Link href="/games" className="block bg-gradient-to-r from-[#FFD700] to-[#FFA500] p-4 rounded-[20px] border border-black/10">
               <div className="flex items-center gap-3">
                 <div className="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-2xl">🎮</div>
                 <div className="flex-1">
@@ -128,6 +122,14 @@ export default function Page(){
               </div>
             </Link>
           </div>
+
+          <Link href="/chat-rooms">
+            <div className="mt-3 bg-[#122025] border border-[#1E3A42] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E676] transition-colors mx-4 lg:mx-0">
+              <div className="flex items-center gap-3"><div className="w-11 h-11 bg-[#00E676]/20 rounded-xl flex items-center justify-center text-xl">💬</div><div><h3 className="font-black text-[15px]">غرف الدردشات العامة</h3><p className="text-[11px] text-white/50">بنات • الجزيرة • دارفور • كردفان</p></div></div>
+              <div className="bg-[#00E676] text-black text-[12px] font-black px-4 py-2 rounded-full">ادخل</div>
+            </div>
+          </Link>
+
           <Link href="/ads">
             <div className="mt-3 mx-4 lg:mx-0 bg-[#122025] border border-[#2A4A5A] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E5FF] transition-all group">
               <div className="flex items-center gap-3">
@@ -158,11 +160,7 @@ export default function Page(){
             </div>
             <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 px-1">
               {trendingPosts.map((p:any,i)=>(
-                <button
-                  key={p.id}
-                  onClick={()=>scrollToPost(p.id)}
-                  className="relative min-w-[110px] w-[110px] h-[180px] rounded-2xl overflow-hidden bg-[#122025] border border-white/10 flex-shrink-0 text-right"
-                >
+                <button key={p.id} onClick={()=>scrollToPost(p.id)} className="relative min-w-[110px] w-[110px] h-[180px] rounded-2xl overflow-hidden bg-[#122025] border border-white/10 flex-shrink-0 text-right">
                   <img src={p.imageUrl || p.mediaUrl || `https://picsum.photos/seed/${p.id}/200/300`} className="absolute inset-0 w-full h-full object-cover opacity-60" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
                   <div className="absolute top-2 left-2 w-6 h-6 bg-[#00E5FF] text-black rounded-full flex items-center justify-center font-black text-[12px]">{i+1}</div>
