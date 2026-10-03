@@ -115,6 +115,25 @@ export default function Page(){
             </div>
           </Link>
 
+import Link from "next/link";
+
+//... جوه الـ return
+<Link href="/games" className="block bg-gradient-to-r from-[#FFD700] to-[#FFA500] p-4 rounded-[20px] border border-black/10">
+  <div className="flex items-center gap-3">
+    <div className="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-2xl">🎮</div>
+    <div className="flex-1">
+      <p className="font-black text-black text-[16px]">العاب بوستاتي</p>
+      <p className="text-[12px] text-black/60 font-bold">برج بوستاتي • العب الآن</p>
+    </div>
+    <span className="bg-black text-white text-[11px] px-3 py-1 rounded-full font-black">جديد</span>
+  </div>
+</Link>
+
+
+
+
+
+
           {/* ✅ بطاقة الإعلانات الجديدة - هنا الإضافة */}
           <Link href="/ads">
             <div className="mt-3 mx-4 lg:mx-0 bg-[#122025] border border-[#2A4A5A] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E5FF] transition-all group">
