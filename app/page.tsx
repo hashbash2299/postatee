@@ -115,8 +115,8 @@ export default function Page(){
               <div className="flex items-center gap-3">
                 <div className="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-2xl">🎮</div>
                 <div className="flex-1">
-                  <p className="font-black text-black text-[16px]">العاب بوستاتي</p>
-                  <p className="text-[12px] text-black/60 font-bold">برج بوستاتي • العب الآن</p>
+                  <p className="font-black text-white text-[16px]">العاب بوستاتي</p>
+                  <p className="text-[12px] text-white/60 font-bold">برج بوستاتي • العب الآن</p>
                 </div>
                 <span className="bg-black text-white text-[11px] px-3 py-1 rounded-full font-black">جديد</span>
               </div>
