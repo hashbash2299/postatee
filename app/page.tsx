@@ -108,6 +108,21 @@ export default function Page(){
               </div>
             </Link>
           </div>
+
+          {/* ✅ بطاقة العاب بوستاتي - مصححة */}
+          <div className="mt-3 mx-4 lg:mx-0">
+            <Link href="/games" className="block bg-gradient-to-r from-[#FFD700] to-[#FFA500] p-4 rounded-[20px] border border-black/10 hover:scale-[1.01] transition-all shadow-[0_8px_20px_rgba(255,215,0,0.25)]">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-2xl">🎮</div>
+                <div className="flex-1">
+                  <p className="font-black text-black text-[16px]">العاب بوستاتي</p>
+                  <p className="text-[12px] text-black/60 font-bold">برج بوستاتي • العب الآن</p>
+                </div>
+                <span className="bg-black text-white text-[11px] px-3 py-1 rounded-full font-black">جديد</span>
+              </div>
+            </Link>
+          </div>
+
           <Link href="/chat-rooms">
             <div className="mt-3 bg-[#122025] border border-[#1E3A42] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E676] transition-colors mx-4 lg:mx-0">
               <div className="flex items-center gap-3"><div className="w-11 h-11 bg-[#00E676]/20 rounded-xl flex items-center justify-center text-xl">💬</div><div><h3 className="font-black text-[15px]">غرف الدردشات العامة</h3><p className="text-[11px] text-white/50">بنات • الجزيرة • دارفور • كردفان</p></div></div>
@@ -115,26 +130,6 @@ export default function Page(){
             </div>
           </Link>
 
-import Link from "next/link";
-
-//... جوه الـ return
-<Link href="/games" className="block bg-gradient-to-r from-[#FFD700] to-[#FFA500] p-4 rounded-[20px] border border-black/10">
-  <div className="flex items-center gap-3">
-    <div className="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-2xl">🎮</div>
-    <div className="flex-1">
-      <p className="font-black text-black text-[16px]">العاب بوستاتي</p>
-      <p className="text-[12px] text-black/60 font-bold">برج بوستاتي • العب الآن</p>
-    </div>
-    <span className="bg-black text-white text-[11px] px-3 py-1 rounded-full font-black">جديد</span>
-  </div>
-</Link>
-
-
-
-
-
-
-          {/* ✅ بطاقة الإعلانات الجديدة - هنا الإضافة */}
           <Link href="/ads">
             <div className="mt-3 mx-4 lg:mx-0 bg-[#122025] border border-[#2A4A5A] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E5FF] transition-all group">
               <div className="flex items-center gap-3">
