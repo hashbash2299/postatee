@@ -10,10 +10,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-[#0B1418] text-white">
         <PresenceProvider>
           <FixedHeaderWrapper />
+          {/* ✅ اهم سطر - يخلي المكالمة تظهر في كل الموقع */}
           <GlobalCall />
           <div className="pt-[110px] min-h-screen">{children}</div>
 
-          {/* فوتر الصفحات المهمة لـ AdSense */}
           <footer className="bg-[#0B1418] border-t border-white/10 mt-10 py-10 text-center">
             <div className="flex flex-wrap gap-6 justify-center text-sm text-gray-300 mb-4">
               <Link href="/about" className="hover:text-white hover:underline">من نحن</Link>
@@ -22,10 +22,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/terms" className="hover:text-white hover:underline">شروط الاستخدام</Link>
             </div>
             <p className="text-xs text-gray-500">
-              © {new Date().getFullYear()} بوستاتي Postatee - جميع الحقوق محفوظة. نحن منصة تواصل اجتماعي ونشر الوظائف فقط.
+              © {new Date().getFullYear()} بوستاتي Postatee - جميع الحقوق محفوظة.
             </p>
           </footer>
-
         </PresenceProvider>
       </body>
     </html>

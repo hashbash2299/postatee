@@ -30,16 +30,54 @@ export default function Page(){
       try {
         if (!u) { router.push('/login'); return; }
         const userRef = doc(db, 'users', u.uid);
-        let snap = await getDoc(userRef);
-        if (!snap.exists()) {
-          await setDoc(userRef, { uid: u.uid, email: u.email, displayName: u.displayName || 'Postatee', username: 'user_'+u.uid.slice(0,5), role: 'عضو', profileCompleted: true, followers: 0, following: 0, photoURL: u.photoURL || null, createdAt: new Date() }, { merge: true });
-          snap = await getDoc(userRef);
+        const snap = await getDoc(userRef);
+
+        if (snap.exists()) {
+          const data = snap.data();
+          // حماية اضافية لو الاسم كان Postatee قديم
+          if(!data.displayName || data.displayName === 'Postatee'){
+            const fallback = data.username || u.email?.split('@')[0] || 'مستخدم';
+            setCurrentUser({...data, displayName: fallback, uid: u.uid });
+          } else {
+            setCurrentUser({...data, uid: u.uid });
+          }
+        } else {
+          const fallbackName = u.email?.split('@')[0] || `user_${u.uid.slice(0,5)}`;
+          const newUser = {
+            uid: u.uid,
+            email: u.email,
+            displayName: u.displayName || fallbackName,
+            username: fallbackName,
+            role: 'عضو',
+            profileCompleted: false,
+            followers: 0,
+            following: 0,
+            photoURL: u.photoURL || null,
+            createdAt: new Date()
+          };
+          await setDoc(userRef, newUser);
+          setCurrentUser(newUser);
         }
-        setCurrentUser({...snap.data(), uid: u.uid });
-      } finally { setLoading(false); }
+      } catch(e){
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
     });
     return () => unsub();
   }, [router]);
+
+  // تحديث لحظي لاسم المستخدم لو اتعدل من البروفايل
+  useEffect(()=>{
+    if(!currentUser?.uid) return;
+    const ref = doc(db,'users',currentUser.uid);
+    const unsub = onSnapshot(ref, (s)=>{
+      if(s.exists()){
+        setCurrentUser((prev:any)=> ({...prev,...s.data()}));
+      }
+    });
+    return ()=> unsub();
+  },[currentUser?.uid]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "posts"), (snap) => {
@@ -174,7 +212,6 @@ export default function Page(){
             </div>
           </div>
 
-          {/* ✅ قصصنا - بعد تريند السودان مباشرة */}
           <div className="bg-[#122025] lg:rounded-2xl mx-4 lg:mx-0 mt-3 border border-[#1A2E35] overflow-hidden">
             <Qasasna currentUser={currentUser} />
           </div>
