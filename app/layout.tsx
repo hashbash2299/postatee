@@ -3,6 +3,19 @@ import FixedHeaderWrapper from "@/components/layout/FixedHeaderWrapper";
 import PresenceProvider from "@/components/PresenceProvider";
 import GlobalCall from "@/components/GlobalCall";
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Postatee - منصة سودانية",
+  description: "منصة سودانية - تواصل ومكالمات صوتية",
+  manifest: "/manifest.json",
+  themeColor: "#00E5FF",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Postatee",
+  },
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
