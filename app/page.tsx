@@ -29,11 +29,13 @@ export default function Page(){
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { router.replace('/login'); return; }
       try {
-        const userRef = doc(db, 'users', u.uid);
-        const snap = await getDoc(userRef);
+        const snap = await getDoc(doc(db, 'users', u.uid));
         if (snap.exists()) {
-          setCurrentUser({ uid: u.uid,...snap.data() });
+          const data = snap.data();
+          // قديم وعنده بروفايل - خليه في الرئيسية طوالي
+          setCurrentUser({ uid: u.uid,...data });
         } else {
+          // جديد ما عنده مستند - وديه يكمل البروفايل (ده الطبيعي)
           router.replace('/profile/setup');
           return;
         }
@@ -48,8 +50,7 @@ export default function Page(){
     const ref = doc(db,'users',currentUser.uid);
     const unsub = onSnapshot(ref, (s)=>{
       if(s.exists()){
-        const d = s.data();
-        setCurrentUser((prev:any)=> ({ uid: currentUser.uid,...prev,...d }));
+        setCurrentUser((prev:any)=> ({ uid: currentUser.uid,...prev,...s.data() }));
       }
     });
     return ()=> unsub();
@@ -110,7 +111,6 @@ export default function Page(){
 
         <main className="flex-1 max-w-[720px] mx-auto w-full pb-[80px] lg:pb-4">
           <div className="bg-[#122025] lg:rounded-2xl m-0 lg:m-4 p-4 border-b lg:border border-[#1A2E35] overflow-hidden"><Stories currentUser={currentUser} /></div>
-
           <div className="mx-4 mt-3">
             <Link href="/video-maker">
               <div className="bg-gradient-to-r from-[#FFD700] via-[#FFC700] to-[#FFB000] rounded-2xl p-[2px] cursor-pointer hover:scale-[1.01] transition-all">
@@ -124,7 +124,6 @@ export default function Page(){
               </div>
             </Link>
           </div>
-
           <div className="mt-3 mx-4 lg:mx-0">
             <Link href="/games" className="block bg-gradient-to-r from-[#FFD700] to-[#FFA500] p-4 rounded-[20px] border border-black/10 hover:scale-[1.01] transition-all shadow-[0_8px_20px_rgba(255,215,0,0.25)]">
               <div className="flex items-center gap-3">
@@ -137,14 +136,12 @@ export default function Page(){
               </div>
             </Link>
           </div>
-
           <Link href="/chat-rooms">
             <div className="mt-3 bg-[#122025] border border-[#1E3A42] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E676] transition-colors mx-4 lg:mx-0">
               <div className="flex items-center gap-3"><div className="w-11 h-11 bg-[#00E676]/20 rounded-xl flex items-center justify-center text-xl">💬</div><div><h3 className="font-black text-[15px]">غرف الدردشات العامة</h3><p className="text-[11px] text-white/50">بنات • الجزيرة • دارفور • كردفان</p></div></div>
               <div className="bg-[#00E676] text-black text-[12px] font-black px-4 py-2 rounded-full">ادخل</div>
             </div>
           </Link>
-
           <Link href="/ads">
             <div className="mt-3 mx-4 lg:mx-0 bg-[#122025] border border-[#2A4A5A] rounded-[16px] p-3 flex items-center justify-between hover:border-[#00E5FF] transition-all group">
               <div className="flex items-center gap-3">
@@ -159,15 +156,12 @@ export default function Page(){
               <div className="bg-white text-black text-[12px] font-black px-4 py-2 rounded-full">إدارة</div>
             </div>
           </Link>
-
           <div className="lg:hidden mx-4 mt-3 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
             {SUDANESE_HASHTAGS.map(h=><Link key={h} href={`/hashtag/${h.replace('#','')}`} className="whitespace-nowrap bg-[#122025] border border-[#1A2E35] px-3 py-1.5 rounded-full text-[13px] font-bold text-[#00E5FF]">{h}</Link>)}
           </div>
-
           <div className="sticky top-[88px] z-[20] bg-[#0B1418]/80 backdrop-blur-xl px-0 lg:px-4 py-2 mt-3">
             <div className="bg-[#122025] lg:rounded-2xl border-y lg:border border-[#1A2E35] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"><CreatePost currentUser={currentUser} /></div>
           </div>
-
           <div className="lg:hidden mt-3 px-2">
             <div className="flex items-center justify-between px-2 mb-2">
               <h3 className="font-black text-[15px]">🔥 تريند السودان</h3>
@@ -187,11 +181,9 @@ export default function Page(){
               ))}
             </div>
           </div>
-
           <div className="bg-[#122025] lg:rounded-2xl mx-4 lg:mx-0 mt-3 border border-[#1A2E35] overflow-hidden">
             <Qasasna currentUser={currentUser} />
           </div>
-
           <div className="space-y-2 px-0 lg:px-4 mt-3">
             {posts.filter(p=>!hiddenPosts.includes(p.id)).map(post=>(
               <div key={post.id} id={`post-${post.id}`} className={`bg-[#122025] lg:rounded-2xl border-y lg:border overflow-hidden transition-all duration-700 ${highlighted===post.id? 'border-[#00E5FF] shadow-[0_0_20px_rgba(0,229,255,0.4)] scale-[1.02]' : 'border-[#1A2E35]'}`}>
@@ -200,7 +192,6 @@ export default function Page(){
             ))}
           </div>
         </main>
-
         <aside className="hidden lg:flex w-[320px] flex-col gap-4 sticky top-[88px] h-[calc(100vh-88px)] overflow-y-auto p-2">
           <div className="bg-[#122025] rounded-2xl border border-[#1A2E35] p-4">
             <h3 className="font-black text-[18px] flex items-center gap-2 mb-4"><Hash className="w-5 h-5 text-[#00E5FF]" /> هاشتاقات سودانية</h3>
