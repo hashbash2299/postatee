@@ -27,6 +27,7 @@ export function useVoiceCall(myUid: string, myData: any) {
   const [incomingCallId, setIncomingCallId] = useState<string>("");
   const [status, setStatus] = useState<'idle'|'calling'|'ringing'|'inCall'>('idle');
   const [callId, setCallId] = useState<string>("");
+  const [micError, setMicError] = useState<string>("");
 
   const getCallId = (otherId: string) => [myUid, otherId].sort().join('_');
 
@@ -90,7 +91,6 @@ export function useVoiceCall(myUid: string, myData: any) {
       snap.docChanges().forEach(async (ch)=>{
         const data = ch.doc.data() as any;
         const id = ch.doc.id;
-
         if((ch.type==='added' || ch.type==='modified') && data.to===myUid && data.from!==myUid && data.type==='offer'){
           if(status==='idle'){
             setIncoming(data);
@@ -127,6 +127,42 @@ export function useVoiceCall(myUid: string, myData: any) {
     return ()=> unsub();
   },[myUid, callId, status]);
 
+  // ✅ فنكشن جديدة تطلب المايك بطريقة آمنة
+  const getMicStream = async (): Promise<MediaStream | null> => {
+    setMicError("");
+    try {
+      // تحقق اولا هل المتصفح بيدعم
+      if(!navigator.mediaDevices?.getUserMedia) throw new Error("المتصفح ما بيدعم المكالمات");
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation:true,
+          noiseSuppression:true,
+          autoGainControl:true,
+          sampleRate:48000,
+          channelCount:1
+        },
+        video:false
+      });
+      return stream;
+    } catch (err: any) {
+      let msg = "";
+      if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+        msg = "قفلت المايك من المتصفح. اضغط على 🔒 فوق جنب الرابط واعمل السماح للمايكروفون ثم اعمل ريفريش";
+      } else if(err.name === 'NotFoundError'){
+        msg = "ما لقينا مايك في الجهاز";
+      } else if(err.name === 'NotReadableError'){
+        msg = "المايك مستخدم في تطبيق تاني، اقفل الواتساب او الماسنجر وجرب تاني";
+      } else {
+        msg = "فشل فتح المايك: " + (err.message || err.name);
+      }
+      setMicError(msg);
+      // ما نعمل alert بشع، نخلي الواجهة تعرضو
+      console.error("Mic error:", err);
+      return null;
+    }
+  };
+
   const setupPC = async (cId: string) => {
     const pc = new RTCPeerConnection(RTC_CONFIG);
     pcRef.current = pc;
@@ -159,10 +195,10 @@ export function useVoiceCall(myUid: string, myData: any) {
       }
     };
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true, sampleRate:48000, channelCount:1 },
-      video:false
-    });
+    // ✅ هنا بنستخدم الفنكشن الجديدة
+    const stream = await getMicStream();
+    if(!stream) throw new Error("MIC_DENIED");
+
     localStreamRef.current = stream;
     stream.getTracks().forEach(t=> pc.addTrack(t, stream));
 
@@ -186,21 +222,28 @@ export function useVoiceCall(myUid: string, myData: any) {
 
   const startCall = async (otherId: string) => {
     if(!otherId) return;
-    const cId = getCallId(otherId);
-    setCallId(cId);
-    setStatus('calling');
-    const pc = await setupPC(cId);
-    const offer = await pc.createOffer({ offerToReceiveAudio:true } as any);
-    await pc.setLocalDescription(offer);
-    await setDoc(doc(db, "voiceCalls", cId), {
-      type:'offer',
-      from:myUid,
-      to:otherId,
-      fromName:myData?.displayName || 'مستخدم',
-      fromAvatar:myData?.avatar || '',
-      sdp:offer.sdp,
-      createdAt:serverTimestamp()
-    });
+    try {
+      const cId = getCallId(otherId);
+      setCallId(cId);
+      setStatus('calling');
+      const pc = await setupPC(cId);
+      const offer = await pc.createOffer({ offerToReceiveAudio:true } as any);
+      await pc.setLocalDescription(offer);
+      await setDoc(doc(db, "voiceCalls", cId), {
+        type:'offer',
+        from:myUid,
+        to:otherId,
+        fromName:myData?.displayName || 'مستخدم',
+        fromAvatar:myData?.avatar || '',
+        sdp:offer.sdp,
+        createdAt:serverTimestamp()
+      });
+    } catch(e: any){
+      if(e.message!== 'MIC_DENIED'){
+        console.error(e);
+      }
+      setStatus('idle');
+    }
   };
 
   const answerCall = async () => {
@@ -214,9 +257,10 @@ export function useVoiceCall(myUid: string, myData: any) {
       await pc.setLocalDescription(answer);
       await setDoc(doc(db, "voiceCalls", incomingCallId), { type:'answer', from:myUid, to:incoming.from, sdp:answer.sdp, createdAt:serverTimestamp() }, { merge:true });
       setStatus('inCall');
-    }catch(e){
-      console.error(e);
-      alert('فشل فتح المايك - ادي الاذن للمتصفح');
+    }catch(e: any){
+      if(e.message!== 'MIC_DENIED'){
+        console.error(e);
+      }
       setStatus('idle');
     }
   };
@@ -227,7 +271,7 @@ export function useVoiceCall(myUid: string, myData: any) {
     if(keepAliveRef.current) clearInterval(keepAliveRef.current);
     pcRef.current?.close(); pcRef.current=null;
     localStreamRef.current?.getTracks().forEach(t=>t.stop());
-    setStatus('idle'); setIncoming(null); setIncomingCallId(""); setCallId("");
+    setStatus('idle'); setIncoming(null); setIncomingCallId(""); setCallId(""); setMicError("");
     if(cId){
       try{
         await setDoc(doc(db,"voiceCalls",cId), { type:'ended', endedAt: serverTimestamp() }, {merge:true});
@@ -236,5 +280,5 @@ export function useVoiceCall(myUid: string, myData: any) {
     }
   };
 
-  return { incoming, status, startCall, answerCall, endCall, remoteAudioRef };
+  return { incoming, status, micError, startCall, answerCall, endCall, remoteAudioRef };
 }
