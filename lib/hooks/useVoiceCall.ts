@@ -4,13 +4,21 @@ import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot, deleteDoc, serverTimestamp, collection, addDoc, query, where } from "firebase/firestore";
 
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" },{ urls: "stun:stun1.l.google.com:19302" }],
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+  ],
 };
 
 export function useVoiceCall(myUid: string, myData: any) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
+  const vibrateInterval = useRef<any>(null);
   const statusRef = useRef<'idle'|'calling'|'ringing'|'inCall'>('idle');
 
   const [incoming, setIncoming] = useState<any>(null);
@@ -21,6 +29,39 @@ export function useVoiceCall(myUid: string, myData: any) {
 
   useEffect(()=>{ statusRef.current = status; },[status]);
 
+  // انشاء صوت الرنين مرة واحدة
+  useEffect(()=>{
+    const audio = new Audio("https://actions.google.com/sounds/v1/alarms/phone_alerts_and_rings.ogg");
+    audio.loop = true;
+    audio.preload = "auto";
+    ringtoneRef.current = audio;
+    return ()=>{ audio.pause(); };
+  },[]);
+
+  // تشغيل / ايقاف الرنين والهزاز حسب الحالة
+  useEffect(()=>{
+    if(status==='ringing' || status==='calling'){
+      // رنين
+      ringtoneRef.current?.play().catch(()=>{});
+      // هزاز - يشتغل كل ثانيتين
+      if('vibrate' in navigator){
+        navigator.vibrate([500,300,500]);
+        vibrateInterval.current = setInterval(()=>{
+          navigator.vibrate([500,300,500]);
+        },1500);
+      }
+    }else{
+      // ايقاف
+      ringtoneRef.current?.pause();
+      if(ringtoneRef.current) ringtoneRef.current.currentTime = 0;
+      if('vibrate' in navigator) navigator.vibrate(0);
+      if(vibrateInterval.current){ clearInterval(vibrateInterval.current); vibrateInterval.current=null; }
+    }
+    return ()=>{
+      if(vibrateInterval.current) clearInterval(vibrateInterval.current);
+    }
+  },[status]);
+
   const getCallId = (otherId: string) => [myUid, otherId].sort().join('_');
 
   const cleanup = () => {
@@ -29,10 +70,13 @@ export function useVoiceCall(myUid: string, myData: any) {
     localStreamRef.current?.getTracks().forEach(t=>t.stop());
     localStreamRef.current=null;
     if(remoteAudioRef.current) remoteAudioRef.current.srcObject=null;
+    // ايقاف الرنين والهزاز
+    ringtoneRef.current?.pause();
+    if('vibrate' in navigator) navigator.vibrate(0);
+    if(vibrateInterval.current){ clearInterval(vibrateInterval.current); vibrateInterval.current=null; }
     setStatus('idle'); setIncoming(null); setIncomingCallId(""); setCallId("");
   };
 
-  // استقبال - بدون status في dependency
   useEffect(()=>{
     if(!myUid) return;
     const q = query(collection(db, "voiceCalls"), where("to","==",myUid));
@@ -48,7 +92,6 @@ export function useVoiceCall(myUid: string, myData: any) {
     return ()=>unsub();
   },[myUid, callId]);
 
-  // انتظار answer
   useEffect(()=>{
     if(!callId) return;
     const unsub = onSnapshot(doc(db,"voiceCalls",callId), async (snap)=>{
@@ -66,8 +109,17 @@ export function useVoiceCall(myUid: string, myData: any) {
   },[callId]);
 
   const getMic = async ()=>{
-    try{ return await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true}, video:false}); }
-    catch{ setMicError("المايك مقفول افتحه من فوق"); return null; }
+    try{
+      const s = await navigator.mediaDevices.getUserMedia({
+        audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true },
+        video:false
+      });
+      s.getTracks().forEach(t=>{ t.enabled = true; });
+      return s;
+    }catch{
+      setMicError("المايك مقفول افتحه من فوق");
+      return null;
+    }
   };
 
   const startCall = async (otherId:string)=>{
@@ -79,7 +131,14 @@ export function useVoiceCall(myUid: string, myData: any) {
     pcRef.current=pc; localStreamRef.current=stream;
     stream.getTracks().forEach(t=>pc.addTrack(t,stream));
     pc.onicecandidate = e=>{ if(e.candidate) addDoc(collection(db,"voiceCalls",cId,"candidates"), {candidate:e.candidate.toJSON(), from:myUid}); };
-    pc.ontrack = e=>{ if(remoteAudioRef.current){ remoteAudioRef.current.srcObject=e.streams[0]; remoteAudioRef.current.play().catch(()=>{}); } };
+    pc.ontrack = e=>{
+      if(remoteAudioRef.current){
+        remoteAudioRef.current.srcObject = e.streams[0];
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current.volume = 1;
+        remoteAudioRef.current.play().catch(()=>{});
+      }
+    };
     pc.onconnectionstatechange = ()=>{ if(pc.connectionState==='connected') setStatus('inCall'); };
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
     await setDoc(doc(db,"voiceCalls",cId), {type:'offer', from:myUid, to:otherId, fromName:myData?.displayName||'مستخدم', fromAvatar:myData?.avatar||'', sdp:offer.sdp, createdAt:serverTimestamp()});
@@ -90,13 +149,25 @@ export function useVoiceCall(myUid: string, myData: any) {
 
   const answerCall = async ()=>{
     if(!incoming ||!incomingCallId) return;
-    if(remoteAudioRef.current){ try{ remoteAudioRef.current.muted=false; remoteAudioRef.current.play().catch(()=>{}); }catch{} }
+    // ايقاف الرنين فور الضغط
+    ringtoneRef.current?.pause();
+    if('vibrate' in navigator) navigator.vibrate(0);
+    if(remoteAudioRef.current){
+      try{ remoteAudioRef.current.muted=false; remoteAudioRef.current.volume=1; remoteAudioRef.current.play().catch(()=>{}); }catch{}
+    }
     const stream = await getMic(); if(!stream) return;
     const pc = new RTCPeerConnection(RTC_CONFIG);
     pcRef.current=pc; localStreamRef.current=stream;
     stream.getTracks().forEach(t=>pc.addTrack(t,stream));
     pc.onicecandidate = e=>{ if(e.candidate) addDoc(collection(db,"voiceCalls",incomingCallId,"candidates"), {candidate:e.candidate.toJSON(), from:myUid}); };
-    pc.ontrack = e=>{ if(remoteAudioRef.current){ remoteAudioRef.current.srcObject=e.streams[0]; remoteAudioRef.current.play().catch(()=>{}); } };
+    pc.ontrack = e=>{
+      if(remoteAudioRef.current){
+        remoteAudioRef.current.srcObject = e.streams[0];
+        remoteAudioRef.current.muted = false;
+        remoteAudioRef.current.volume = 1;
+        remoteAudioRef.current.play().catch(()=>{});
+      }
+    };
     await pc.setRemoteDescription(new RTCSessionDescription({type:'offer', sdp:incoming.sdp}));
     const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
     await setDoc(doc(db,"voiceCalls",incomingCallId), {type:'answer', from:myUid, to:incoming.from, sdp:ans.sdp}, {merge:true});

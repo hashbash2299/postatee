@@ -154,13 +154,10 @@ export default function MessageRoom(){
               {status==='ringing'? <>
                 <button
                   onClick={()=>{
-                    if(remoteAudioRef.current){
-                      remoteAudioRef.current.muted = false;
-                      remoteAudioRef.current.play().catch(()=>{});
-                    }
+                    remoteAudioRef.current?.play().catch(()=>{});
                     answerCall();
                   }}
-                  className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30 active:scale-90 transition select-none"
+                  className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center"
                 >
                   <Phone className="w-9 h-9 text-white"/>
                 </button>
