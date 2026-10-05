@@ -75,20 +75,6 @@ export default function MessageRoom(){
     return ()=> { unsub(); unsubAds(); }
   },[id, router])
 
-  // فك بلوك الصوت في iOS بضغطة اولى
-  useEffect(()=>{
-    const unlock = async ()=>{
-      if(remoteAudioRef.current){
-        try{ await remoteAudioRef.current.play().catch(()=>{}); }catch{}
-      }
-      document.removeEventListener('touchstart', unlock);
-      document.removeEventListener('click', unlock);
-    };
-    document.addEventListener('touchstart', unlock, {once:true});
-    document.addEventListener('click', unlock, {once:true});
-    return ()=> { document.removeEventListener('touchstart', unlock); document.removeEventListener('click', unlock); }
-  },[])
-
   const handleSend = async ()=>{
     if(!text.trim() ||!myUid ||!chatId) return
     const msg = text.trim()
@@ -98,17 +84,6 @@ export default function MessageRoom(){
   }
   const addReaction = async (msgId:string, emoji:string)=>{
     await updateDoc(doc(db,'chats',chatId,'messages',msgId),{ reaction:emoji }); setActiveReactId(null)
-  }
-
-  const handleAnswer = async () => {
-    // اهم سطر لموبايل-لموبايل: شغل الصوت قبل اي await
-    if(remoteAudioRef.current){
-      try{
-        remoteAudioRef.current.muted = false;
-        await remoteAudioRef.current.play();
-      }catch{}
-    }
-    await answerCall();
   }
 
   return (
@@ -177,7 +152,16 @@ export default function MessageRoom(){
             {micError && <p className="bg-red-500/20 border border-red-500/30 text-red-200 text-[12px] px-3 py-2 rounded-xl mt-4 max-w-[90%] text-center">{micError}</p>}
             <div className="flex gap-6 mt-10">
               {status==='ringing'? <>
-                <button onTouchEnd={(e)=>{e.preventDefault(); handleAnswer();}} onClick={handleAnswer} className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 active:scale-90 transition select-none">
+                <button
+                  onClick={()=>{
+                    if(remoteAudioRef.current){
+                      remoteAudioRef.current.muted = false;
+                      remoteAudioRef.current.play().catch(()=>{});
+                    }
+                    answerCall();
+                  }}
+                  className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30 active:scale-90 transition select-none"
+                >
                   <Phone className="w-9 h-9 text-white"/>
                 </button>
                 <button onClick={()=>endCall()} className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center active:scale-90 transition"><PhoneOff className="w-9 h-9 text-white"/></button>
@@ -185,7 +169,6 @@ export default function MessageRoom(){
                 <button onClick={()=>endCall(friendId)} className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/20 active:scale-90 transition"><PhoneOff className="w-9 h-9 text-white"/></button>
               </>}
             </div>
-            {status==='inCall' && <p className="text-white/20 text-[11px] mt-8">لو ما سامع صوت ارفع الصوت وتأكد انك ما عامل كتم</p>}
           </div>
         )}
 
@@ -193,8 +176,7 @@ export default function MessageRoom(){
         <div className="bg-[#101c1f] border-t border-white/10 shrink-0 w-full"><div className="max-w-[700px] mx-auto flex items-center gap-2 px-3 py-2.5 w-full"><button onClick={()=>setShowEmoji(v=>!v)} className="w-[40px] h-[40px] flex items-center justify-center shrink-0"><Smile className="w-6 h-6 text-white/60" /></button><div className="flex-1 bg-[#1E2D32] rounded-full px-4 flex items-center min-h-[44px]"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=> e.key==='Enter' && handleSend()} placeholder="اكتب رسالة..." className="flex-1 bg-transparent text-white text-[15px] outline-none placeholder:text-white/40 py-2.5 w-full"/></div><button onClick={handleSend} disabled={!text.trim()} className="w-[44px] h-[44px] rounded-full bg-[#1bb6d4] flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition"><Send className="w-5 h-5 text-white -rotate-12" /></button></div></div>
       </div>
 
-      {/* عنصر الصوت - لازم يكون autoPlay + playsInline ومش hidden */}
-      <audio ref={remoteAudioRef} autoPlay playsInline style={{position:'absolute', width:1, height:1, opacity:0, pointerEvents:'none'}} />
+      <audio ref={remoteAudioRef} autoPlay playsInline />
     </div>
   )
 }
