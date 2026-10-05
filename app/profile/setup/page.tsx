@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { Camera, Check, Circle, Crown, Gem, Star, Verified } from "lucide-react";
@@ -55,18 +55,19 @@ export default function SetupProfile() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) { router.push('/login'); return; }
+      if (!u) { router.replace('/login'); return; }
       setUid(u.uid);
       const snap = await getDoc(doc(db, 'users', u.uid));
       if (snap.exists()) {
         const data = snap.data();
         setExistingData(data);
-        // ✅ ما بنجيب الايميل نهائي كاسم
+        // ✅ لو مكمل بروفايلو وديه الرئيسية طوالي
+        if(data.profileCompleted && data.displayName && data.username){
+          router.replace('/');
+          return;
+        }
         if(data.displayName && data.displayName!== 'Postatee' &&!data.displayName.includes('@')){
           setDisplayName(data.displayName);
-        } else if(data.username &&!data.username.includes('@')){
-          // لو كان القديم Postatee خليه فاضي عشان يكتب العربي
-          setDisplayName("");
         }
         if(data.username) setUsername(data.username);
         if(data.avatar) setAvatar(data.avatar);
@@ -84,9 +85,7 @@ export default function SetupProfile() {
     if (!cleanDisplayName ||!cleanUsername) return alert("اكمل البيانات");
     if (cleanDisplayName.length < 2) return alert("الاسم قصير شديد");
     if (cleanUsername.length < 3) return alert("اليوزرنيم قصير");
-
-    // ✅ حماية قوية ضد الايميل و Postatee
-    if (cleanDisplayName.includes('@') || cleanDisplayName.includes('.com') || cleanDisplayName.includes('.net')) {
+    if (cleanDisplayName.includes('@') || cleanDisplayName.includes('.com')) {
       return alert("الاسم ما ينفع يكون ايميل، اكتب اسمك العربي");
     }
     if(RESERVED.includes(cleanDisplayName.toLowerCase()) || RESERVED.includes(cleanUsername)){
@@ -105,10 +104,13 @@ export default function SetupProfile() {
         }
       }
 
-      // ✅ القاعدة الذهبية - بنحدث الاسم العربي واليوزر فقط، ما بنلمس role ولا email
-      await updateDoc(doc(db, 'users', uid), {
+      // ✅ كان updateDoc وفشل لو المستند ما موجود - هسا setDoc merge
+      await setDoc(doc(db, 'users', uid), {
+        uid,
         displayName: cleanDisplayName,
         displayNameLower: cleanDisplayName.toLowerCase(),
+        displayNameArabic: cleanDisplayName,
+        displayNameArabicLower: cleanDisplayName.toLowerCase(),
         username: cleanUsername,
         usernameLower: cleanUsername,
         avatar,
@@ -116,9 +118,11 @@ export default function SetupProfile() {
         isOnline,
         lastSeen: serverTimestamp(),
         profileCompleted: true,
-        updatedAt: serverTimestamp()
-      });
-      router.push('/');
+        updatedAt: serverTimestamp(),
+        createdAt: existingData?.createdAt || serverTimestamp(),
+      }, { merge: true });
+
+      router.replace('/');
     } catch(e:any){
       alert(e.message);
     } finally {
