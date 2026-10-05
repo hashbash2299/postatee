@@ -12,8 +12,6 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
     { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
   ],
-  iceTransportPolicy: "all" as any,
-  bundlePolicy: "max-bundle" as any,
 };
 
 export function useVoiceCall(myUid: string, myData: any) {
@@ -47,9 +45,7 @@ export function useVoiceCall(myUid: string, myData: any) {
   const startRing = (isOutgoing: boolean) => {
     stopRing();
     try{
-      if(typeof navigator!== 'undefined' && (navigator as any).vibrate){
-        (navigator as any).vibrate(isOutgoing? [300,700,300] : [500,200,500,200,500,200]);
-      }
+      if((navigator as any).vibrate) (navigator as any).vibrate(isOutgoing? [300,700,300] : [500,200,500,200]);
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -60,21 +56,11 @@ export function useVoiceCall(myUid: string, myData: any) {
       osc.start();
       const interval = setInterval(()=>{
         if(!ringRef.current) return;
-        if(gain.gain.value < 0.1){
-          gain.gain.setValueAtTime(0.4, ctx.currentTime);
-          if((navigator as any).vibrate) (navigator as any).vibrate(isOutgoing? [300] : [400]);
-        } else {
-          gain.gain.setValueAtTime(0, ctx.currentTime);
-        }
+        gain.gain.value = gain.gain.value < 0.1? 0.4 : 0;
       }, isOutgoing? 1100 : 850);
-      gain.gain.setValueAtTime(0.4, ctx.currentTime);
+      gain.gain.value = 0.4;
       ringRef.current = { ctx, osc, gain, interval };
-    }catch{
-      try{
-        const a = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-        a.loop=true; a.play().catch(()=>{}); (window as any)._ring=a;
-      }catch{}
-    }
+    }catch{}
   };
 
   useEffect(()=>{
@@ -108,18 +94,10 @@ export function useVoiceCall(myUid: string, myData: any) {
           }
         }
         if(ch.type==='removed' && id===callId){
-          stopRing();
-          if(keepAliveRef.current) clearInterval(keepAliveRef.current);
-          pcRef.current?.close(); pcRef.current=null;
-          localStreamRef.current?.getTracks().forEach(t=>t.stop());
-          setStatus('idle'); setIncoming(null); setIncomingCallId(""); setCallId("");
+          endCallLocal();
         }
         if((ch.type==='added' || ch.type==='modified') && id===callId && data.type==='ended'){
-          stopRing();
-          if(keepAliveRef.current) clearInterval(keepAliveRef.current);
-          pcRef.current?.close(); pcRef.current=null;
-          localStreamRef.current?.getTracks().forEach(t=>t.stop());
-          setStatus('idle'); setIncoming(null); setIncomingCallId(""); setCallId("");
+          endCallLocal();
           setTimeout(async ()=>{ try{ await deleteDoc(doc(db,"voiceCalls",id)); }catch{} }, 1000);
         }
       });
@@ -127,151 +105,129 @@ export function useVoiceCall(myUid: string, myData: any) {
     return ()=> unsub();
   },[myUid, callId, status]);
 
-  // ✅ فنكشن جديدة تطلب المايك بطريقة آمنة
   const getMicStream = async (): Promise<MediaStream | null> => {
     setMicError("");
     try {
-      // تحقق اولا هل المتصفح بيدعم
-      if(!navigator.mediaDevices?.getUserMedia) throw new Error("المتصفح ما بيدعم المكالمات");
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation:true,
-          noiseSuppression:true,
-          autoGainControl:true,
-          sampleRate:48000,
-          channelCount:1
-        },
+      if(!navigator.mediaDevices?.getUserMedia) throw new Error("NOT_SUPPORTED");
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true },
         video:false
       });
-      return stream;
     } catch (err: any) {
-      let msg = "";
-      if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
-        msg = "قفلت المايك من المتصفح. اضغط على 🔒 فوق جنب الرابط واعمل السماح للمايكروفون ثم اعمل ريفريش";
+      if(err.name === 'NotAllowedError'){
+        setMicError("المايك مقفول. اضغط على 🔒 فوق جنب رابط الموقع واعمل Allow للمايك ثم اعمل ريفريش");
       } else if(err.name === 'NotFoundError'){
-        msg = "ما لقينا مايك في الجهاز";
+        setMicError("ما لقينا مايك");
       } else if(err.name === 'NotReadableError'){
-        msg = "المايك مستخدم في تطبيق تاني، اقفل الواتساب او الماسنجر وجرب تاني";
+        setMicError("المايك شغال في تطبيق تاني (واتساب). اقفلو وجرب");
       } else {
-        msg = "فشل فتح المايك: " + (err.message || err.name);
+        setMicError("فشل فتح المايك");
       }
-      setMicError(msg);
-      // ما نعمل alert بشع، نخلي الواجهة تعرضو
-      console.error("Mic error:", err);
       return null;
     }
   };
 
-  const setupPC = async (cId: string) => {
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-    pcRef.current = pc;
-
-    pc.onconnectionstatechange = () => {
-      if(pc.connectionState==='failed' || pc.connectionState==='disconnected'){
-        try{ pc.restartIce(); }catch{}
-      }
-    };
-    pc.oniceconnectionstatechange = () => {
-      if(pc.iceConnectionState==='failed'){
-        try{ pc.restartIce(); }catch{}
-      }
-    };
-
-    pc.onicecandidate = e=>{
-      if(e.candidate){
-        addDoc(collection(db, "voiceCalls", cId, "candidates"), { candidate: e.candidate.toJSON(), from: myUid }).catch(()=>{});
-      }
-    };
-
-    pc.ontrack = e=>{
-      if(remoteAudioRef.current){
-        remoteAudioRef.current.srcObject = e.streams[0];
-        remoteAudioRef.current.volume = 1;
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.play().catch(()=>{
-          document.addEventListener('click', ()=> remoteAudioRef.current?.play(), {once:true});
-        });
-      }
-    };
-
-    // ✅ هنا بنستخدم الفنكشن الجديدة
-    const stream = await getMicStream();
-    if(!stream) throw new Error("MIC_DENIED");
-
-    localStreamRef.current = stream;
-    stream.getTracks().forEach(t=> pc.addTrack(t, stream));
-
+  const endCallLocal = () => {
+    stopRing();
     if(keepAliveRef.current) clearInterval(keepAliveRef.current);
-    keepAliveRef.current = setInterval(()=>{
-      if(pc.connectionState==='connected'){
-        setDoc(doc(db,"voiceCalls",cId), { lastPing: serverTimestamp() }, {merge:true}).catch(()=>{});
-      }
-    }, 15000);
-
-    onSnapshot(collection(db, "voiceCalls", cId, "candidates"), s=>{
-      s.docChanges().forEach(async c=>{
-        if(c.type==='added' && c.doc.data().from!==myUid){
-          try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data().candidate)); }catch{}
-        }
-      });
-    });
-
-    return pc;
+    pcRef.current?.close(); pcRef.current=null;
+    localStreamRef.current?.getTracks().forEach(t=>t.stop());
+    localStreamRef.current=null;
+    setStatus('idle'); setIncoming(null); setIncomingCallId(""); setCallId("");
   };
 
   const startCall = async (otherId: string) => {
     if(!otherId) return;
-    try {
-      const cId = getCallId(otherId);
-      setCallId(cId);
-      setStatus('calling');
-      const pc = await setupPC(cId);
+    const stream = await getMicStream();
+    if(!stream) return;
+
+    const cId = getCallId(otherId);
+    setCallId(cId);
+    setStatus('calling');
+
+    try{
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      pcRef.current = pc;
+      localStreamRef.current = stream;
+      stream.getTracks().forEach(t=> pc.addTrack(t, stream));
+
+      pc.onicecandidate = e=>{ if(e.candidate) addDoc(collection(db, "voiceCalls", cId, "candidates"), { candidate: e.candidate.toJSON(), from: myUid }); };
+      pc.ontrack = e=>{ if(remoteAudioRef.current){ remoteAudioRef.current.srcObject = e.streams[0]; remoteAudioRef.current.play().catch(()=>{}); } };
+      pc.onconnectionstatechange = ()=>{ if(pc.connectionState==='failed') pc.restartIce(); };
+
       const offer = await pc.createOffer({ offerToReceiveAudio:true } as any);
       await pc.setLocalDescription(offer);
+
       await setDoc(doc(db, "voiceCalls", cId), {
-        type:'offer',
-        from:myUid,
-        to:otherId,
-        fromName:myData?.displayName || 'مستخدم',
-        fromAvatar:myData?.avatar || '',
-        sdp:offer.sdp,
-        createdAt:serverTimestamp()
+        type:'offer', from:myUid, to:otherId,
+        fromName:myData?.displayName || 'مستخدم', fromAvatar:myData?.avatar || '',
+        sdp:offer.sdp, createdAt:serverTimestamp()
       });
-    } catch(e: any){
-      if(e.message!== 'MIC_DENIED'){
-        console.error(e);
-      }
+
+      onSnapshot(collection(db, "voiceCalls", cId, "candidates"), s=>{
+        s.docChanges().forEach(async c=>{
+          if(c.type==='added' && c.doc.data().from!==myUid){
+            try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data().candidate)); }catch{}
+          }
+        });
+      });
+
+      if(keepAliveRef.current) clearInterval(keepAliveRef.current);
+      keepAliveRef.current = setInterval(()=>{ if(pc.connectionState==='connected') setDoc(doc(db,"voiceCalls",cId), { lastPing: serverTimestamp() }, {merge:true}).catch(()=>{}); }, 15000);
+
+    }catch(e){
+      console.error(e);
+      stream.getTracks().forEach(t=>t.stop());
       setStatus('idle');
     }
   };
 
   const answerCall = async () => {
     if(!incoming ||!incomingCallId) return;
+
+    const stream = await getMicStream();
+    if(!stream) return;
+
     stopRing();
-    await new Promise(r=> setTimeout(r, 150));
+
     try{
-      const pc = await setupPC(incomingCallId);
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      pcRef.current = pc;
+      localStreamRef.current = stream;
+      stream.getTracks().forEach(t=> pc.addTrack(t, stream));
+
+      pc.onicecandidate = e=>{ if(e.candidate) addDoc(collection(db, "voiceCalls", incomingCallId, "candidates"), { candidate: e.candidate.toJSON(), from: myUid }); };
+      pc.ontrack = e=>{ if(remoteAudioRef.current){ remoteAudioRef.current.srcObject = e.streams[0]; remoteAudioRef.current.play().catch(()=>{}); } };
+
       await pc.setRemoteDescription(new RTCSessionDescription({ type:'offer', sdp:incoming.sdp }));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      await setDoc(doc(db, "voiceCalls", incomingCallId), { type:'answer', from:myUid, to:incoming.from, sdp:answer.sdp, createdAt:serverTimestamp() }, { merge:true });
+
+      await setDoc(doc(db, "voiceCalls", incomingCallId), {
+        type:'answer', from:myUid, to:incoming.from, sdp:answer.sdp, createdAt:serverTimestamp()
+      }, { merge:true });
+
       setStatus('inCall');
-    }catch(e: any){
-      if(e.message!== 'MIC_DENIED'){
-        console.error(e);
-      }
-      setStatus('idle');
+
+      onSnapshot(collection(db, "voiceCalls", incomingCallId, "candidates"), s=>{
+        s.docChanges().forEach(async c=>{
+          if(c.type==='added' && c.doc.data().from!==myUid){
+            try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data().candidate)); }catch{}
+          }
+        });
+      });
+
+    }catch(e){
+      console.error(e);
+      stream.getTracks().forEach(t=>t.stop());
+      setStatus('ringing');
     }
   };
 
   const endCall = async (otherId?: string) => {
     const cId = otherId? getCallId(otherId) : callId;
-    stopRing();
-    if(keepAliveRef.current) clearInterval(keepAliveRef.current);
-    pcRef.current?.close(); pcRef.current=null;
-    localStreamRef.current?.getTracks().forEach(t=>t.stop());
-    setStatus('idle'); setIncoming(null); setIncomingCallId(""); setCallId(""); setMicError("");
+    endCallLocal();
+    setMicError("");
     if(cId){
       try{
         await setDoc(doc(db,"voiceCalls",cId), { type:'ended', endedAt: serverTimestamp() }, {merge:true});

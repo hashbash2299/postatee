@@ -25,30 +25,31 @@ export default function Page(){
   const [highlighted, setHighlighted] = useState<string|null>(null);
   const router = useRouter();
 
-  // ✅ الحل النهائي - ما بننشئ يوزر هنا، بنقرا بس
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) { router.push('/login'); return; }
-      const userRef = doc(db, 'users', u.uid);
-      const snap = await getDoc(userRef);
-      if (snap.exists()) {
-        setCurrentUser({ uid: u.uid,...snap.data() });
-        setLoading(false);
-      } else {
-        // لو المستند ما موجود - وديه يكمل البروفايل
-        router.push('/profile/setup');
-      }
+      if (!u) { router.replace('/login'); return; }
+      try {
+        const userRef = doc(db, 'users', u.uid);
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          setCurrentUser({ uid: u.uid,...snap.data() });
+        } else {
+          router.replace('/profile/setup');
+          return;
+        }
+      } catch(e){ console.error(e); }
+      finally { setLoading(false); }
     });
     return () => unsub();
   }, [router]);
 
-  // تحديث لحظي
   useEffect(()=>{
     if(!currentUser?.uid) return;
     const ref = doc(db,'users',currentUser.uid);
     const unsub = onSnapshot(ref, (s)=>{
       if(s.exists()){
-        setCurrentUser((prev:any)=> ({...prev,...s.data() }));
+        const d = s.data();
+        setCurrentUser((prev:any)=> ({ uid: currentUser.uid,...prev,...d }));
       }
     });
     return ()=> unsub();
@@ -91,7 +92,6 @@ export default function Page(){
 
   return (
     <div className="min-h-screen bg-[#0B1418] text-white overflow-x-hidden" dir="rtl">
-      {/*... باقي الـ JSX حقك زي ما هو... */}
       <div className="flex max-w-[1600px] mx-auto gap-4">
         <aside className="hidden lg:flex w-[300px] flex-col gap-4 sticky top-[88px] h-[calc(100vh-88px)] overflow-y-auto p-2">
           <div className="bg-[#122025] rounded-2xl border border-[#1A2E35] p-4">
