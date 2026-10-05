@@ -1,8 +1,12 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "com.postatee.app",
-        "sha256_cert_fingerprints": ["2C:97:DE:34:94:15:FD:32:4B:E3:26:79:10:04:DA:4C:67:64:AE:DD:5C:C4:7E:71:71:EC:E6:51:B0:59:A2:C9"]
-      }
-    }]
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.postatee.twa",
+      "sha256_cert_fingerprints": [
+        "65:AC:E1:25:E8:EA:6A:9D:F3:3C:E6:A8:25:97:0D:0C:C6:61:B6:2E:E1:89:66:62:D3:53:85:2F:5F:C7:8B:FD"
+      ]
+    }
+  }
+]
