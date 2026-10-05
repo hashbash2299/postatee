@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // البنوك - اي زول يشوف ويعدل حقو بس
+    match /banks/{bankId} {
+      allow create: if request.auth != null 
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.amount > 0;
+      
+      allow read, update, delete: if request.auth != null 
+                                  && resource.data.ownerId == request.auth.uid;
+    }
+
+    // المعاملات / المصاريف
+    match /transactions/{transId} {
+      allow create: if request.auth != null 
+                    && request.resource.data.ownerId == request.auth.uid;
+      
+      allow read, update, delete: if request.auth != null 
+                                  && resource.data.ownerId == request.auth.uid;
+    }
+
+    // اي حاجة تانية ممنوعة
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

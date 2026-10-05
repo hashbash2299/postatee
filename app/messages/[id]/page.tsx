@@ -1,0 +1,169 @@
+"use client"
+import { useEffect, useState, useRef } from "react"
+import { db, auth } from "@/lib/firebase"
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, setDoc, updateDoc, writeBatch, increment } from "firebase/firestore"
+import { onAuthStateChanged } from "firebase/auth"
+import { useParams, useRouter } from "next/navigation"
+import { ArrowLeft, Send, User, Smile, CheckCheck, Crown, Star, ExternalLink, Phone, PhoneOff } from "lucide-react"
+import { useVoiceCall } from "@/lib/hooks/useVoiceCall"
+
+const EMOJIS = ["❤️","😂","😍","😭","😅","👍","🙏","🔥","💔","😎","🥺","🤣","😁","😘","👌","👏"]
+
+export default function MessageRoom(){
+  const params = useParams()
+  const id = params.id as string
+  const [myUid,setMyUid]=useState<string|null>(null)
+  const [myData,setMyData]=useState<any>(null)
+  const [friendId,setFriendId]=useState<string>("")
+  const [friendData,setFriendData]=useState<any>(null)
+  const [messages,setMessages]=useState<any[]>([])
+  const [ads,setAds]=useState<any[]>([])
+  const [text,setText]=useState("")
+  const [chatId,setChatId]=useState("")
+  const [showEmoji,setShowEmoji]=useState(false)
+  const [activeReactId,setActiveReactId]=useState<string|null>(null)
+  const bottomRef=useRef<any>(null)
+  const router=useRouter()
+  const { incoming, status, startCall, answerCall, endCall } = useVoiceCall(myUid||"", myData)
+
+  //... نفس الـ useEffect حقك القديم بدون تغيير - انسخه من ملفك
+  useEffect(()=>{
+    const qAds = collection(db,'golden_ads')
+    const unsubAds = onSnapshot(qAds as any, (snap: any)=>{
+      const all = snap.docs.map((d: any)=>({id:d.id,...d.data()})) as any[]
+      setAds(all.filter((a:any)=> a.active!== false))
+    })
+    const unsub = onAuthStateChanged(auth, async (u: any)=>{
+      if(!u) return router.push('/login')
+      setMyUid(u.uid)
+      const mySnap = await getDoc(doc(db,'users',u.uid))
+      if(mySnap.exists()) setMyData(mySnap.data())
+      let finalChatId = id
+      let otherId = ""
+      if(id.includes('_')){
+        finalChatId = id
+        otherId = id.split('_').find((p: any)=> p!==u.uid) || ""
+      } else {
+        otherId = id
+        finalChatId = [u.uid, otherId].sort().join('_')
+      }
+      setFriendId(otherId)
+      setChatId(finalChatId)
+      if(otherId){
+        const fSnap = await getDoc(doc(db,'users',otherId))
+        if(fSnap.exists()) setFriendData(fSnap.data())
+      }
+      const chatRef = doc(db,'chats',finalChatId)
+      const chatSnap = await getDoc(chatRef)
+      if(!chatSnap.exists() && otherId){
+        await setDoc(chatRef,{ members:[u.uid, otherId], created_at:serverTimestamp(), updated_at:serverTimestamp(), lastMessage:"", unreadCounts:{} })
+      }
+      const q = query(collection(db,'chats',finalChatId,'messages'), orderBy('created_at','asc'))
+      const unsubMsg = onSnapshot(q, async (snap: any)=>{
+        setMessages(snap.docs.map((d: any)=>({id:d.id,...d.data()})) as any[])
+        setTimeout(()=> bottomRef.current?.scrollIntoView({behavior:'smooth'}), 80)
+        const unread = snap.docs.filter((d: any)=> d.data().to===u.uid &&!d.data().read)
+        if(unread.length>0){
+          const batch = writeBatch(db)
+          unread.forEach((d: any)=> batch.update(d.ref,{read:true}))
+          await batch.commit()
+          await updateDoc(doc(db,'chats',finalChatId), { [`unreadCounts.${u.uid}`]: 0, lastRead: true }).catch(()=>{})
+        }
+      })
+      return ()=> unsubMsg()
+    })
+    return ()=> { unsub(); unsubAds(); }
+  },[id, router])
+
+  const handleSend = async ()=>{
+    if(!text.trim() ||!myUid ||!chatId) return
+    const msg = text.trim()
+    setText(""); setShowEmoji(false)
+    await addDoc(collection(db,'chats',chatId,'messages'),{ from:myUid, to:friendId, text:msg, read:false, reaction:null, created_at:serverTimestamp() })
+    await updateDoc(doc(db,'chats',chatId),{ lastMessage:msg, updated_at:serverTimestamp(), lastAt:serverTimestamp(), lastSenderId: myUid, [`unreadCounts.${friendId}`]: increment(1) })
+  }
+  const addReaction = async (msgId:string, emoji:string)=>{
+    await updateDoc(doc(db,'chats',chatId,'messages',msgId),{ reaction:emoji }); setActiveReactId(null)
+  }
+
+  return (
+    <div className="h-[100dvh] bg-[#080e0e] flex overflow-hidden" dir="rtl">
+      {/*... اعلانات نفس كودك */}
+      <div className="hidden lg:flex w-[360px] xl:w-[400px] bg-[#0a1416] border-l border-white/10 flex-col overflow-y-auto shrink-0">
+        <div className="p-4 border-b border-white/10 bg-[#122025] sticky top-0 z-10"><div className="flex items-center gap-2"><Crown className="w-5 h-5 text-yellow-400"/><h3 className="font-bold text-white text-[15px]">الشركاء الذهبيون</h3><span className="mr-auto bg-yellow-400/20 text-yellow-400 text-[10px] px-2 py-1 rounded-full font-bold">ممول</span></div></div>
+        <div className="p-3 space-y-4">
+          {ads.length===0 && <p className="text-white/20 text-[12px] text-center py-10">لا توجد اعلانات حاليا</p>}
+          {ads.map((ad: any,i: number)=>(
+            <a key={ad.id} href={ad.link||'#'} target="_blank" className={`relative rounded-[18px] overflow-hidden group cursor-pointer border block ${i===0?'h-[280px] border-yellow-400/20':'h-[160px] border-white/10'}`}>
+              <img src={ad.img} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
+              <div className={`absolute inset-0 bg-gradient-to-t ${ad.color||'from-yellow-400 to-orange-500'} opacity-60 mix-blend-multiply`}></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
+              <div className="absolute bottom-0 p-4 w-full">
+                {i===0 && <span className="bg-yellow-400 text-black text-[11px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 w-fit mb-2"><Star className="w-3 h-3"/> شريك ذهبي</span>}
+                <h4 className="text-white font-bold text-[16px]">{ad.brand}</h4>
+                <p className="text-white/70 text-[12px] mt-1">{ad.title}</p>
+                {i===0 && <span className="mt-3 w-full bg-white text-black rounded-full py-2 text-[13px] font-bold flex items-center justify-center gap-1">زور المتجر <ExternalLink className="w-4 h-4"/></span>}
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-[56px] bg-[#122025] border-b border-white/10 flex items-center gap-3 px-4 shrink-0 sticky top-0 z-20">
+          <button onClick={()=>router.push('/messages')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><ArrowLeft className="w-5 h-5 text-white"/></button>
+          {friendData?.avatar? <img src={friendData.avatar} className="w-8 h-8 rounded-full object-cover"/> : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><User className="w-4 h-4 text-white"/></div>}
+          <div className="flex flex-col flex-1"><span className="font-bold text-white text-[14px]">{friendData?.displayName || 'محادثة'}</span><span className="text-[11px] text-white/40">{status==='inCall'?'في مكالمة...':'متصل الآن'}</span></div>
+
+          {/* ✅ زر الاتصال الجديد */}
+          <button onClick={()=> friendId && startCall(friendId)} className="w-9 h-9 rounded-full bg-[#00E5FF]/20 border border-[#00E5FF]/30 flex items-center justify-center hover:bg-[#00E5FF]/30 transition">
+            <Phone className="w-5 h-5 text-[#00E5FF]"/>
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-3 bg-[#080e0e]"><div className="max-w-[700px] mx-auto w-full space-y-3">
+          {messages.map((m: any)=>{
+            const isMe = m.from===myUid
+            return (
+              <div key={m.id} className={`flex gap-2 items-end w-full ${isMe?'justify-start':'justify-end'}`}>
+                {isMe && (myData?.avatar? <img src={myData.avatar} className="w-8 h-8 rounded-full object-cover shrink-0"/> : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0"><User className="w-4 h-4 text-white"/></div>)}
+                <div className={`flex flex-col max-w-[75%] ${isMe?'items-start':'items-end'}`}>
+                  <div onClick={()=> setActiveReactId(activeReactId===m.id? null : m.id)} className={`relative px-4 py-3 rounded-[18px] text-[15px] leading-6 shadow-sm cursor-pointer select-none ${isMe?'bg-[#00E5FF] text-black rounded-bl-[6px]':'bg-[#1E2D32] text-white rounded-br-[6px]'}`}>
+                    <div className="whitespace-pre-wrap break-words">{m.text}</div>
+                    {m.reaction && <span className="absolute -bottom-3 left-3 bg-[#0B1418] border border-white/10 rounded-full w-7 h-7 flex items-center justify-center text-[14px] shadow-lg">{m.reaction}</span>}
+                    <div className={`flex items-center gap-1 mt-1.5 ${isMe?'justify-start':'justify-end'}`}><span className={`text-[11px] ${isMe?'text-black/50':'text-white/40'}`}>{m.created_at?.seconds? new Date(m.created_at.seconds*1000).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : 'الآن'}</span>{isMe && <span className="mr-1">{m.read? <CheckCheck className="w-[16px] h-[16px] text-[#0064ff]" /> : <CheckCheck className="w-[16px] h-[16px] text-black/30" />}</span>}</div>
+                  </div>
+                  {activeReactId===m.id && <div className="flex gap-1 mt-2 bg-[#1E2D32] rounded-full px-2 py-1 border border-white/10 shadow-2xl">{["❤️","😂","😍","👍","🔥","😭"].map(e=>(<button key={e} onClick={()=>addReaction(m.id,e)} className="w-9 h-9 rounded-full hover:bg-white/10 active:scale-90 transition text-[20px]">{e}</button>))}</div>}
+                </div>
+                {!isMe && (friendData?.avatar? <img src={friendData.avatar} className="w-8 h-8 rounded-full object-cover shrink-0"/> : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0"><User className="w-4 h-4 text-white"/></div>)}
+              </div>
+            )
+          })}<div ref={bottomRef} className="h-1"/></div></div>
+
+        {/* ✅ واجهة المكالمة */}
+        {status!=='idle' && (
+          <div className="fixed inset-0 lg:absolute z-[100] bg-[#080e0e]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6">
+            <img src={friendData?.avatar} className="w-28 h-28 rounded-full border-4 border-[#00E5FF]/30 mb-4"/>
+            <h2 className="text-white font-black text-xl">{friendData?.displayName}</h2>
+            <p className="text-white/50 text-sm mt-1">
+              {status==='calling' && 'جاري الاتصال...'}
+              {status==='ringing' && 'مكالمة واردة...'}
+              {status==='inCall' && 'متصل الآن - صوت نقي 12kbps'}
+            </p>
+            <div className="flex gap-6 mt-10">
+              {status==='ringing'? <>
+                <button onClick={answerCall} className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20"><Phone className="w-8 h-8 text-white"/></button>
+                <button onClick={()=>endCall()} className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center"><PhoneOff className="w-8 h-8 text-white"/></button>
+              </> : <>
+                <button onClick={()=>endCall(friendId)} className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center shadow-lg"><PhoneOff className="w-8 h-8 text-white"/></button>
+              </>}
+            </div>
+          </div>
+        )}
+
+        {showEmoji && <div className="bg-[#122025] border-t border-white/10 p-3 shrink-0"><div className="max-w-[700px] mx-auto grid grid-cols-8 gap-1">{EMOJIS.map(e=>(<button key={e} onClick={()=> setText(p=> p+e)} className="text-[22px] hover:bg-white/10 w-10 h-10 rounded-xl transition">{e}</button>))}</div></div>}
+        <div className="bg-[#101c1f] border-t border-white/10 shrink-0 w-full"><div className="max-w-[700px] mx-auto flex items-center gap-2 px-3 py-2.5 w-full"><button onClick={()=>setShowEmoji(v=>!v)} className="w-[40px] h-[40px] flex items-center justify-center shrink-0"><Smile className="w-6 h-6 text-white/60" /></button><div className="flex-1 bg-[#1E2D32] rounded-full px-4 flex items-center min-h-[44px]"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=> e.key==='Enter' && handleSend()} placeholder="اكتب رسالة..." className="flex-1 bg-transparent text-white text-[15px] outline-none placeholder:text-white/40 py-2.5 w-full"/></div><button onClick={handleSend} disabled={!text.trim()} className="w-[44px] h-[44px] rounded-full bg-[#1bb6d4] flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition"><Send className="w-5 h-5 text-white -rotate-12" /></button></div></div>
+      </div>
+    </div>
+  )
+}
