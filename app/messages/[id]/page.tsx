@@ -25,8 +25,7 @@ export default function MessageRoom(){
   const bottomRef=useRef<any>(null)
   const router=useRouter()
 
-  // ✅ الاصلاح - بنستخدم remoteAudioRef مباشرة
-  const { incoming, status, startCall, answerCall, endCall, remoteAudioRef } = useVoiceCall(myUid||"", myData)
+  const { incoming, status, micError, startCall, answerCall, endCall, remoteAudioRef } = useVoiceCall(myUid||"", myData)
 
   useEffect(()=>{
     const qAds = collection(db,'golden_ads')
@@ -67,14 +66,28 @@ export default function MessageRoom(){
         if(unread.length>0){
           const batch = writeBatch(db)
           unread.forEach((d: any)=> batch.update(d.ref,{read:true}))
-          await batch.commit()
-          await updateDoc(doc(db,'chats',finalChatId), { [`unreadCounts.${u.uid}`]: 0, lastRead: true }).catch(()=>{})
+          await batch.commit().catch(()=>{})
+          await updateDoc(doc(db,'chats',finalChatId), { [`unreadCounts.${u.uid}`]: 0 }).catch(()=>{})
         }
       })
       return ()=> unsubMsg()
     })
     return ()=> { unsub(); unsubAds(); }
   },[id, router])
+
+  // فك بلوك الصوت في iOS بضغطة اولى
+  useEffect(()=>{
+    const unlock = async ()=>{
+      if(remoteAudioRef.current){
+        try{ await remoteAudioRef.current.play().catch(()=>{}); }catch{}
+      }
+      document.removeEventListener('touchstart', unlock);
+      document.removeEventListener('click', unlock);
+    };
+    document.addEventListener('touchstart', unlock, {once:true});
+    document.addEventListener('click', unlock, {once:true});
+    return ()=> { document.removeEventListener('touchstart', unlock); document.removeEventListener('click', unlock); }
+  },[])
 
   const handleSend = async ()=>{
     if(!text.trim() ||!myUid ||!chatId) return
@@ -85,6 +98,17 @@ export default function MessageRoom(){
   }
   const addReaction = async (msgId:string, emoji:string)=>{
     await updateDoc(doc(db,'chats',chatId,'messages',msgId),{ reaction:emoji }); setActiveReactId(null)
+  }
+
+  const handleAnswer = async () => {
+    // اهم سطر لموبايل-لموبايل: شغل الصوت قبل اي await
+    if(remoteAudioRef.current){
+      try{
+        remoteAudioRef.current.muted = false;
+        await remoteAudioRef.current.play();
+      }catch{}
+    }
+    await answerCall();
   }
 
   return (
@@ -109,7 +133,7 @@ export default function MessageRoom(){
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden relative">
         <header className="h-[56px] bg-[#122025] border-b border-white/10 flex items-center gap-3 px-4 shrink-0 sticky top-0 z-20">
           <button onClick={()=>router.push('/messages')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><ArrowLeft className="w-5 h-5 text-white"/></button>
           {friendData?.avatar? <img src={friendData.avatar} className="w-8 h-8 rounded-full object-cover"/> : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><User className="w-4 h-4 text-white"/></div>}
@@ -139,26 +163,29 @@ export default function MessageRoom(){
           })}<div ref={bottomRef} className="h-1"/></div></div>
 
         {status!=='idle' && (
-          <div className="fixed inset-0 lg:absolute z-[100] bg-[#080e0e]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6">
+          <div className="absolute inset-0 z-[100] bg-[#080e0e]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6">
             <div className="relative">
-              <img src={friendData?.avatar || myData?.avatar} className="w-28 h-28 rounded-full border-4 border-[#00E5FF]/30 mb-4 object-cover"/>
+              <img src={friendData?.avatar || incoming?.fromAvatar || myData?.avatar} className="w-28 h-28 rounded-full border-4 border-[#00E5FF]/30 mb-4 object-cover"/>
               {status==='calling' && <span className="absolute inset-0 w-28 h-28 rounded-full border-4 border-[#00E5FF]/40 animate-ping"/>}
             </div>
             <h2 className="text-white font-black text-xl">{incoming?.fromName || friendData?.displayName}</h2>
-            <p className="text-white/50 text-sm mt-1">
+            <p className="text-white/50 text-sm mt-1 text-center">
               {status==='calling' && 'جاري الاتصال... 🔔'}
               {status==='ringing' && `يتصل بك ${incoming?.fromName || ''}...`}
-              {status==='inCall' && 'متصل الآن - اضغط السماعة للخروج'}
+              {status==='inCall' && 'متصل الآن'}
             </p>
+            {micError && <p className="bg-red-500/20 border border-red-500/30 text-red-200 text-[12px] px-3 py-2 rounded-xl mt-4 max-w-[90%] text-center">{micError}</p>}
             <div className="flex gap-6 mt-10">
               {status==='ringing'? <>
-                <button onClick={answerCall} className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 active:scale-90 transition"><Phone className="w-8 h-8 text-white"/></button>
-                <button onClick={()=>endCall()} className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center active:scale-90 transition"><PhoneOff className="w-8 h-8 text-white"/></button>
+                <button onTouchEnd={(e)=>{e.preventDefault(); handleAnswer();}} onClick={handleAnswer} className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/20 active:scale-90 transition select-none">
+                  <Phone className="w-9 h-9 text-white"/>
+                </button>
+                <button onClick={()=>endCall()} className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center active:scale-90 transition"><PhoneOff className="w-9 h-9 text-white"/></button>
               </> : <>
                 <button onClick={()=>endCall(friendId)} className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/20 active:scale-90 transition"><PhoneOff className="w-9 h-9 text-white"/></button>
               </>}
             </div>
-            {status==='inCall' && <p className="text-white/20 text-[11px] mt-8">الصوت شغال - تأكد المايك مفتوح</p>}
+            {status==='inCall' && <p className="text-white/20 text-[11px] mt-8">لو ما سامع صوت ارفع الصوت وتأكد انك ما عامل كتم</p>}
           </div>
         )}
 
@@ -166,8 +193,8 @@ export default function MessageRoom(){
         <div className="bg-[#101c1f] border-t border-white/10 shrink-0 w-full"><div className="max-w-[700px] mx-auto flex items-center gap-2 px-3 py-2.5 w-full"><button onClick={()=>setShowEmoji(v=>!v)} className="w-[40px] h-[40px] flex items-center justify-center shrink-0"><Smile className="w-6 h-6 text-white/60" /></button><div className="flex-1 bg-[#1E2D32] rounded-full px-4 flex items-center min-h-[44px]"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=> e.key==='Enter' && handleSend()} placeholder="اكتب رسالة..." className="flex-1 bg-transparent text-white text-[15px] outline-none placeholder:text-white/40 py-2.5 w-full"/></div><button onClick={handleSend} disabled={!text.trim()} className="w-[44px] h-[44px] rounded-full bg-[#1bb6d4] flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition"><Send className="w-5 h-5 text-white -rotate-12" /></button></div></div>
       </div>
 
-      {/* ✅ عنصر الصوت الوحيد - مهم يكون ظاهر */}
-      <audio ref={remoteAudioRef} autoPlay playsInline style={{position:'fixed', top:'-1000px', left:'-1000px'}} />
+      {/* عنصر الصوت - لازم يكون autoPlay + playsInline ومش hidden */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{position:'absolute', width:1, height:1, opacity:0, pointerEvents:'none'}} />
     </div>
   )
 }
