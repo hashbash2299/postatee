@@ -14,7 +14,8 @@ const RTC_CONFIG: RTCConfiguration = {
 export function useVoiceCall(myUid: string, myData: any) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ringRef = useRef<{ ctx: AudioContext, osc: OscillatorNode, gain: GainNode, interval: any } | null>(null);
   const [incoming, setIncoming] = useState<any>(null);
   const [incomingCallId, setIncomingCallId] = useState<string>("");
   const [status, setStatus] = useState<'idle'|'calling'|'ringing'|'inCall'>('idle');
@@ -22,20 +23,81 @@ export function useVoiceCall(myUid: string, myData: any) {
 
   const getCallId = (otherId: string) => [myUid, otherId].sort().join('_');
 
+  const stopRing = () => {
+    try{
+      if(ringRef.current){
+        clearInterval(ringRef.current.interval);
+        ringRef.current.osc.stop();
+        ringRef.current.ctx.close();
+      }
+    }catch{}
+    ringRef.current = null;
+    if(typeof navigator!== 'undefined' && navigator.vibrate) navigator.vibrate(0);
+    try{ (window as any)._ring?.pause(); (window as any)._ring = null; }catch{}
+  };
+
+  const startRing = (isOutgoing: boolean) => {
+    stopRing();
+    try{
+      if(typeof navigator!== 'undefined' && navigator.vibrate){
+        navigator.vibrate(isOutgoing? [300,700] : [500,200,500,200,500]);
+      }
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = isOutgoing? 800 : 500;
+      gain.gain.value = 0;
+      osc.start();
+      const interval = setInterval(()=>{
+        if(!ringRef.current) return;
+        const now = ctx.currentTime;
+        if(gain.gain.value < 0.1){
+          gain.gain.setValueAtTime(0.35, now);
+          if(navigator.vibrate) navigator.vibrate(isOutgoing? [300] : [500,200,500]);
+        } else {
+          gain.gain.setValueAtTime(0, now);
+        }
+      }, isOutgoing? 1200 : 900);
+      // اول رنة
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      ringRef.current = { ctx, osc, gain, interval };
+    }catch{
+      // fallback لصوت من النت لو فشل الـ oscillator
+      try{ const a = new Audio("https://actions.google.com/sounds/v1/ringtones/phone_ringing.ogg"); a.loop=true; a.volume=0.8; a.play().catch(()=>{}); (window as any)._ring=a; }catch{}
+    }
+  };
+
+  useEffect(()=>{
+    if(status==='calling') startRing(true);
+    else if(status==='ringing') startRing(false);
+    else stopRing();
+    return ()=> stopRing();
+  },[status]);
+
   useEffect(()=>{
     if(!myUid) return;
     const unsub = onSnapshot(collection(db, "voiceCalls"), snap=>{
-      snap.forEach(d=>{
-        const data = d.data(); const id = d.id;
-        if(id.includes(myUid) && data.from!==myUid && data.type==='offer' && status==='idle'){
-          setIncoming(data); setIncomingCallId(id); setCallId(id); setStatus('ringing');
-          try{ const a = new Audio("https://actions.google.com/sounds/v1/ringtones/phone_ringing.ogg"); a.loop=true; a.play(); (window as any)._ring=a; }catch{}
+      snap.docChanges().forEach(ch=>{
+        const data = ch.doc.data(); const id = ch.doc.id;
+        if(ch.type==='added' || ch.type==='modified'){
+          if(id.includes(myUid) && data.from!==myUid && data.type==='offer'){
+            if(status==='idle'){
+              setIncoming(data); setIncomingCallId(id); setCallId(id); setStatus('ringing');
+            }
+          }
+          if(id===callId && data.type==='answer' && data.from!==myUid){
+            if(pcRef.current && status==='calling'){
+              pcRef.current.setRemoteDescription(new RTCSessionDescription({ type:'answer', sdp:data.sdp })).then(()=> setStatus('inCall'));
+            }
+          }
         }
-        if(id===callId && data.type==='answer' && data.from!==myUid && status==='calling'){
-          pcRef.current?.setRemoteDescription(new RTCSessionDescription({ type:'answer', sdp:data.sdp })).then(()=> {
-            setStatus('inCall');
-            try{ (window as any)._ring?.pause(); }catch{}
-          });
+        if(ch.type==='removed' && id===callId){
+          stopRing();
+          pcRef.current?.close(); pcRef.current=null;
+          localStreamRef.current?.getTracks().forEach(t=>t.stop());
+          setStatus('idle'); setIncoming(null); setIncomingCallId(""); setCallId("");
         }
       });
     });
@@ -46,11 +108,13 @@ export function useVoiceCall(myUid: string, myData: any) {
     const pc = new RTCPeerConnection(RTC_CONFIG);
     pcRef.current = pc;
     pc.onicecandidate = e=>{
-      if(e.candidate) addDoc(collection(db, "voiceCalls", cId, "candidates"), { candidate: e.candidate.toJSON(), from: myUid });
+      if(e.candidate) addDoc(collection(db, "voiceCalls", cId, "candidates"), { candidate: e.candidate.toJSON(), from: myUid }).catch(()=>{});
     };
     pc.ontrack = e=>{
       if(remoteAudioRef.current){
         remoteAudioRef.current.srcObject = e.streams[0];
+        remoteAudioRef.current.volume = 1;
+        remoteAudioRef.current.muted = false;
         remoteAudioRef.current.play().catch(()=>{});
       }
     };
@@ -77,7 +141,7 @@ export function useVoiceCall(myUid: string, myData: any) {
 
   const answerCall = async () => {
     if(!incoming ||!incomingCallId) return;
-    try{ (window as any)._ring?.pause(); }catch{}
+    stopRing();
     const pc = await setupPC(incomingCallId);
     await pc.setRemoteDescription(new RTCSessionDescription({ type:'offer', sdp:incoming.sdp }));
     const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
@@ -87,7 +151,7 @@ export function useVoiceCall(myUid: string, myData: any) {
 
   const endCall = async (otherId?: string) => {
     const cId = otherId? getCallId(otherId) : callId;
-    try{ (window as any)._ring?.pause(); }catch{}
+    stopRing();
     pcRef.current?.close(); pcRef.current=null;
     localStreamRef.current?.getTracks().forEach(t=>t.stop());
     setStatus('idle'); setIncoming(null); setIncomingCallId(""); setCallId("");

@@ -1,6 +1,7 @@
 import "./globals.css";
 import FixedHeaderWrapper from "@/components/layout/FixedHeaderWrapper";
 import PresenceProvider from "@/components/PresenceProvider";
+import GlobalCall from "@/components/GlobalCall";
 import Link from "next/link";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -9,9 +10,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-[#0B1418] text-white">
         <PresenceProvider>
           <FixedHeaderWrapper />
+          <GlobalCall />
           <div className="pt-[110px] min-h-screen">{children}</div>
 
-          {/* فوتر الصفحات المهمة لـ AdSense - تمت اضافته */}
+          {/* فوتر الصفحات المهمة لـ AdSense */}
           <footer className="bg-[#0B1418] border-t border-white/10 mt-10 py-10 text-center">
             <div className="flex flex-wrap gap-6 justify-center text-sm text-gray-300 mb-4">
               <Link href="/about" className="hover:text-white hover:underline">من نحن</Link>
