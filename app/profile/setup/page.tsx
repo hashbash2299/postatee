@@ -39,7 +39,7 @@ const RoleBadge = ({ role }: { role: string }) => {
   return null;
 };
 
-const RESERVED = ["postatee","admin","بوستاتي","postate","المالك"];
+const RESERVED = ["postatee","admin","بوستاتي","postate","المالك","root"];
 
 export default function SetupProfile() {
   const [displayName, setDisplayName] = useState("");
@@ -55,40 +55,42 @@ export default function SetupProfile() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      try {
-        if (!u) {
-          router.push('/login');
-          return;
+      if (!u) { router.push('/login'); return; }
+      setUid(u.uid);
+      const snap = await getDoc(doc(db, 'users', u.uid));
+      if (snap.exists()) {
+        const data = snap.data();
+        setExistingData(data);
+        // ✅ ما بنجيب الايميل نهائي كاسم
+        if(data.displayName && data.displayName!== 'Postatee' &&!data.displayName.includes('@')){
+          setDisplayName(data.displayName);
+        } else if(data.username &&!data.username.includes('@')){
+          // لو كان القديم Postatee خليه فاضي عشان يكتب العربي
+          setDisplayName("");
         }
-        setUid(u.uid);
-        const snap = await getDoc(doc(db, 'users', u.uid));
-        if (snap.exists()) {
-          const data = snap.data();
-          setExistingData(data);
-          if(data.displayName) setDisplayName(data.displayName);
-          if(data.username) setUsername(data.username);
-          if(data.avatar) setAvatar(data.avatar);
-          if(data.cover) setCover(data.cover);
-        }
-      } catch (err) {
-        console.error("Error loading profile:", err);
-      } finally {
-        setLoading(false);
+        if(data.username) setUsername(data.username);
+        if(data.avatar) setAvatar(data.avatar);
+        if(data.cover) setCover(data.cover);
       }
+      setLoading(false);
     });
     return () => unsub();
   }, [router]);
 
   const handleSave = async () => {
-    if (!displayName.trim() ||!username.trim()) return alert("اكمل البيانات");
-
-    // القاعدة الذهبية هنا
     const cleanUsername = username.toLowerCase().trim().replace('@','').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
     const cleanDisplayName = displayName.trim();
 
+    if (!cleanDisplayName ||!cleanUsername) return alert("اكمل البيانات");
+    if (cleanDisplayName.length < 2) return alert("الاسم قصير شديد");
     if (cleanUsername.length < 3) return alert("اليوزرنيم قصير");
-    if (RESERVED.includes(cleanDisplayName.toLowerCase()) || RESERVED.includes(cleanUsername)) {
-      return alert("الاسم ده محجوز للنظام، اختار اسم تاني");
+
+    // ✅ حماية قوية ضد الايميل و Postatee
+    if (cleanDisplayName.includes('@') || cleanDisplayName.includes('.com') || cleanDisplayName.includes('.net')) {
+      return alert("الاسم ما ينفع يكون ايميل، اكتب اسمك العربي");
+    }
+    if(RESERVED.includes(cleanDisplayName.toLowerCase()) || RESERVED.includes(cleanUsername)){
+      return alert("الاسم ده محجوز للنظام");
     }
 
     setSaving(true);
@@ -96,19 +98,19 @@ export default function SetupProfile() {
       if(existingData?.usernameLower!== cleanUsername){
         const q = query(collection(db, 'users'), where('usernameLower','==',cleanUsername));
         const snap = await getDocs(q);
-        if(!snap.empty){
+        if(!snap.empty && snap.docs[0].id!== uid){
           alert("اليوزرنيم محجوز");
           setSaving(false);
           return;
         }
       }
+
+      // ✅ القاعدة الذهبية - بنحدث الاسم العربي واليوزر فقط، ما بنلمس role ولا email
       await updateDoc(doc(db, 'users', uid), {
         displayName: cleanDisplayName,
         displayNameLower: cleanDisplayName.toLowerCase(),
-
         username: cleanUsername,
         usernameLower: cleanUsername,
-
         avatar,
         cover,
         isOnline,
@@ -163,8 +165,8 @@ export default function SetupProfile() {
               <div className="bg-white/5 rounded-2xl p-3"><p className="text-xl font-black text-white">0</p><p className="text-xs text-white/40">أصدقاء</p></div>
             </div>
 
-            <div><label className="text-sm text-white/60">الاسم الكامل</label><input value={displayName} onChange={e=>setDisplayName(e.target.value)} className="mt-2 w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white outline-none focus:border-cyan-400/50"/></div>
-            <div><label className="text-sm text-white/60">اسم المستخدم</label><input value={username} onChange={e=>setUsername(e.target.value)} placeholder="بدون @" className="mt-2 w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white outline-none focus:border-cyan-400/50"/></div>
+            <div><label className="text-sm text-white/60">الاسم الكامل (عربي)</label><input value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="مثلا: محمد أحمد" className="mt-2 w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white outline-none focus:border-cyan-400/50"/></div>
+            <div><label className="text-sm text-white/60">اسم المستخدم (انجليزي)</label><input value={username} onChange={e=>setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,''))} placeholder="بدون @" dir="ltr" className="mt-2 w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white outline-none focus:border-cyan-400/50 text-left"/></div>
 
             <div><label className="text-sm text-white/60 mb-2 flex gap-2"><Camera className="w-4 h-4"/> اختر صورة رمزية</label>
               <div className="grid grid-cols-4 gap-3">{defaultAvatars.map((a,i)=><img key={i} src={a} onClick={()=>setAvatar(a)} className={`w-full aspect-square rounded-full cursor-pointer border-2 ${avatar===a?'border-cyan-400':'border-transparent'}`} alt="av"/>)}</div>
