@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { doc, getDoc } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
-import { Phone, PhoneOff } from "lucide-react"
+import { Phone, PhoneOff, Volume2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 export default function GlobalCall(){
@@ -21,26 +21,27 @@ export default function GlobalCall(){
     });
   },[]);
 
-  const { incoming, status, answerCall, endCall, remoteAudioRef } = useVoiceCall(uid, me);
+  const { incoming, status, answerCall, endCall, remoteAudioRef, needsTap, forcePlayRemote } = useVoiceCall(uid, me);
 
   const handleAnswer = async () => {
     await answerCall();
-    // وديه صفحة الدردشة بعد الرد
     if(incoming?.from){
       setTimeout(()=> router.push(`/messages/${incoming.from}`), 400);
     }
   };
 
-  // لو مافي مكالمة بس خلي عنصر الصوت موجود للمرسل
-  if(status==='idle' ||!incoming){
-    return <audio ref={remoteAudioRef} autoPlay playsInline hidden />
-  }
+  return (
+    <>
+      {/* عنصر الصوت - لازم يكون موجود دائما ومش hidden */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{display:'none'}} />
 
-  // ✅ يظهر في اي صفحة - حتى الصفحة الرئيسية
-  if(status==='ringing'){
-    return (
-      <>
-        <audio ref={remoteAudioRef} autoPlay playsInline hidden />
+      {needsTap && status==='inCall' && (
+        <button onClick={()=>forcePlayRemote()} className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[9999] bg-[#00E5FF] text-black px-6 py-3 rounded-full font-bold flex items-center gap-2 animate-bounce">
+          <Volume2 className="w-5 h-5"/> اضغط لتشغيل الصوت
+        </button>
+      )}
+
+      {status==='ringing' && incoming && (
         <div className="fixed inset-0 z-[99999] bg-[#080e0e]/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6" dir="rtl">
           <div className="relative">
             <img src={incoming.fromAvatar} className="w-32 h-32 rounded-full border-4 border-green-400 object-cover"/>
@@ -57,14 +58,7 @@ export default function GlobalCall(){
             </button>
           </div>
         </div>
-      </>
-    )
-  }
-
-  // لو انت المتصل ولسه بترن
-  if(status==='calling' || status==='inCall'){
-    return <audio ref={remoteAudioRef} autoPlay playsInline hidden />
-  }
-
-  return <audio ref={remoteAudioRef} autoPlay playsInline hidden />
+      )}
+    </>
+  )
 }
