@@ -153,10 +153,8 @@ export default function MessageRoom(){
             <div className="flex gap-6 mt-10">
               {status==='ringing'? <>
                 <button
-                  onClick={()=>{
-                    remoteAudioRef.current?.play().catch(()=>{});
-                    answerCall();
-                  }}
+onClick={answerCall}
+
                   className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center"
                 >
                   <Phone className="w-9 h-9 text-white"/>
