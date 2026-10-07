@@ -6,23 +6,11 @@ import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { Camera, Check, Circle, Crown, Gem, Star, Verified } from "lucide-react";
 
-const defaultAvatars = [
-  "https://i.pravatar.cc/200?img=8",
-  "https://i.pravatar.cc/200?img=12",
-  "https://i.pravatar.cc/200?img=15",
-  "https://i.pravatar.cc/200?img=32",
-  "https://i.pravatar.cc/200?img=33",
-  "https://i.pravatar.cc/200?img=36",
-  "https://i.pravatar.cc/200?img=59",
-  "https://i.pravatar.cc/200?img=68",
-];
-const defaultCovers = [
-  "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800",
-  "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800",
-  "https://images.unsplash.com/photo-1500534623283-312a57ea4d8d?w=800",
-  "https://images.unsplash.com/photo-1531306728370-e2ebd9d7bb99?w=800",
-  "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800",
-];
+// ✅ التغيير الوحيد - واحدة ديفولت فقط فلكلور سوداني + محايد
+const DEFAULT_AVATAR = "/default-avatar.png";
+const DEFAULT_COVER = "/default-cover.jpg";
+const defaultAvatars = [DEFAULT_AVATAR];
+const defaultCovers = [DEFAULT_COVER];
 
 const getNameColor = (role:string) => {
   if(role === "مؤسس") return "text-cyan-400";
@@ -44,8 +32,8 @@ const RESERVED = ["postatee","admin","بوستاتي","postate","المالك","
 export default function SetupProfile() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
-  const [avatar, setAvatar] = useState(defaultAvatars[0]);
-  const [cover, setCover] = useState(defaultCovers[0]);
+  const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
+  const [cover, setCover] = useState(DEFAULT_COVER);
   const [isOnline, setIsOnline] = useState(true);
   const [uid, setUid] = useState("");
   const [existingData, setExistingData] = useState<any>(null);
@@ -61,7 +49,6 @@ export default function SetupProfile() {
       if (snap.exists()) {
         const data = snap.data();
         setExistingData(data);
-        // ✅ لو مكمل بروفايلو وديه الرئيسية طوالي
         if(data.profileCompleted && data.displayName && data.username){
           router.replace('/');
           return;
@@ -104,7 +91,6 @@ export default function SetupProfile() {
         }
       }
 
-      // ✅ كان updateDoc وفشل لو المستند ما موجود - هسا setDoc merge
       await setDoc(doc(db, 'users', uid), {
         uid,
         displayName: cleanDisplayName,
@@ -145,11 +131,11 @@ export default function SetupProfile() {
       <div className="min-h-screen bg-[#050a0a] p-4 flex justify-center" dir="rtl">
         <div className="w-full max-w-[600px]">
           <div className="relative h-[200px] rounded-[24px] overflow-hidden border border-white/10">
-            <img src={cover} className="w-full h-full object-cover" alt="cover"/>
+            <img src={cover || DEFAULT_COVER} className="w-full h-full object-cover" alt="cover"/>
             <div className="absolute inset-0 bg-black/30"/>
             <div className="absolute bottom-4 left-4 right-4 flex items-end gap-4">
               <div className="relative">
-                <img src={avatar} className="w-24 h-24 rounded-full border-4 border-[#050a0a] object-cover" alt="avatar"/>
+                <img src={avatar || DEFAULT_AVATAR} className="w-24 h-24 rounded-full border-4 border-[#050a0a] object-cover" alt="avatar"/>
                 <span className={`absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-black ${isOnline? 'bg-green-400' : 'bg-gray-500'}`}></span>
               </div>
               <div className="pb-2">
@@ -172,12 +158,14 @@ export default function SetupProfile() {
             <div><label className="text-sm text-white/60">الاسم الكامل (عربي)</label><input value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="مثلا: محمد أحمد" className="mt-2 w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white outline-none focus:border-cyan-400/50"/></div>
             <div><label className="text-sm text-white/60">اسم المستخدم (انجليزي)</label><input value={username} onChange={e=>setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,''))} placeholder="بدون @" dir="ltr" className="mt-2 w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white outline-none focus:border-cyan-400/50 text-left"/></div>
 
-            <div><label className="text-sm text-white/60 mb-2 flex gap-2"><Camera className="w-4 h-4"/> اختر صورة رمزية</label>
-              <div className="grid grid-cols-4 gap-3">{defaultAvatars.map((a,i)=><img key={i} src={a} onClick={()=>setAvatar(a)} className={`w-full aspect-square rounded-full cursor-pointer border-2 ${avatar===a?'border-cyan-400':'border-transparent'}`} alt="av"/>)}</div>
+            <div><label className="text-sm text-white/60 mb-2 flex gap-2"><Camera className="w-4 h-4"/> الصورة الافتراضية - يمكنك تغييرها لاحقاً</label>
+              <div className="grid grid-cols-4 gap-3">{defaultAvatars.map((a,i)=><img key={i} src={a} onClick={()=>setAvatar(a)} className={`w-full aspect-square rounded-full cursor-pointer border-2 ${avatar===a?'border-cyan-400':'border-transparent'} bg-[#1a2a2f]`} alt="av"/>)}</div>
+              <p className="text-[11px] text-white/30 mt-2">أفاتار محايد بدون ملامح - تقدر تغيره من البروفايل بضغطة كاميرا</p>
             </div>
 
-            <div><label className="text-sm text-white/60 mb-2">اختر خلفية افتراضية</label>
+            <div><label className="text-sm text-white/60 mb-2">الخلفية الافتراضية - فلكلور سوداني</label>
               <div className="grid grid-cols-3 gap-3">{defaultCovers.map((c,i)=><img key={i} src={c} onClick={()=>setCover(c)} className={`w-full h-20 rounded-xl object-cover cursor-pointer border-2 ${cover===c?'border-cyan-400':'border-transparent'}`} alt="cover"/>)}</div>
+              <p className="text-[11px] text-white/30 mt-2">تصميم فلكلور سوداني أصيل - تقدر تغيره من البروفايل</p>
             </div>
 
             <div className="flex items-center justify-between bg-white/5 p-4 rounded-full border border-white/10">

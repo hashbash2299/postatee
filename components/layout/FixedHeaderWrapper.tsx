@@ -18,6 +18,7 @@ export default function FixedHeaderWrapper(){
   const [showContacts, setShowContacts] = useState(false);
   const [showDesktopContacts, setShowDesktopContacts] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [myFriendsIds, setMyFriendsIds] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   useEffect(()=>{
@@ -29,18 +30,29 @@ export default function FixedHeaderWrapper(){
         if(snap.exists()) setCurrentUser({uid:u.uid,...snap.data()});
         else setCurrentUser({uid:u.uid, displayName: u.displayName, photoURL: u.photoURL});
       }catch(e){ setCurrentUser({uid:u.uid}); }
+
       onSnapshot(query(collection(db,'friendRequests'), where('to','==', u.uid), where('status','==','pending')), s=> setReqCount(s.size));
       onSnapshot(query(collection(db,'notifications'), where('toUid','==', u.uid)), s=> setNotifCount(s.docs.filter(d=>!d.data().read).length));
-      // ✅ التعديل هنا - كان s.size وهسه بيحسب الغير مقروءة فقط
+
       onSnapshot(query(collection(db,'chats'), where('members','array-contains', u.uid)), s=> {
         let total = 0
         s.docs.forEach(d=>{
-          const data = d.data() as any
-          const myUnread = data.unreadCounts?.[u.uid] || 0
-          total += myUnread
+          total += (d.data() as any).unreadCounts?.[u.uid] || 0
         })
         setMsgCount(total)
       });
+
+      // ✅ الصحيح - بجيب الاصدقاء من collection friends حقل users
+      onSnapshot(query(collection(db,'friends'), where('users','array-contains', u.uid)), s=> {
+        const ids = new Set<string>();
+        s.docs.forEach(d=>{
+          const users = (d.data() as any).users || []
+          const other = users.find((id:string)=> id!== u.uid)
+          if(other) ids.add(other)
+        })
+        setMyFriendsIds(ids)
+      })
+
       onSnapshot(collection(db,'users'), s=> {
         const all = s.docs.map(d=>({id:d.id,...d.data() as any}));
         const filtered = all.filter((x:any)=>{
@@ -59,6 +71,18 @@ export default function FixedHeaderWrapper(){
     return ()=> unsub();
   },[]);
 
+  const handleUserClick = (otherId: string) => {
+    setShowContacts(false);
+    setShowDesktopContacts(false);
+    if(myFriendsIds.has(otherId)){
+      // صديق -> رسائل طوالي
+      router.push(`/messages/${otherId}`);
+    }else{
+      // ما صديق -> بروفايل
+      router.push(`/profile/${otherId}`);
+    }
+  }
+
   const avatarSrc = currentUser?.avatar || currentUser?.photoURL || `https://i.pravatar.cc/100?u=${currentUser?.uid || 'guest'}`;
   if(loading){ return (<div className="fixed top-0 left-0 right-0 z-[100] w-full"><TickerBar /><header className="h-[56px] bg-[#122025] border-b border-white/10 flex items-center justify-center"><div className="w-8 h-8 bg-[#00E5FF] rounded-lg flex items-center justify-center text-black font-black animate-pulse">P</div></header></div>); }
   if(!currentUser){ return (<div className="fixed top-0 left-0 right-0 z-[100] w-full"><TickerBar /><header dir="rtl" className="h-[56px] bg-[#122025]/95 backdrop-blur-xl border-b border-[#1A2E35] flex items-center justify-between px-3"><Link href="/" className="flex items-center gap-2"><div className="w-8 h-8 bg-[#00E5FF] rounded-lg flex items-center justify-center text-black font-black">P</div><h1 className="font-black text-white">Posta<span className="text-[#00E5FF]">tee</span></h1></Link><Link href="/login" className="text-sm bg-[#00E5FF] text-black px-4 py-1.5 rounded-full font-bold">دخول</Link></header></div>); }
@@ -69,7 +93,7 @@ export default function FixedHeaderWrapper(){
       <header dir="rtl" className="hidden lg:flex items-center justify-between px-6 py-3 bg-[#122025]/95 backdrop-blur-xl border-b border-[#1A2E35] w-full relative">
         <div className="flex items-center gap-4">
           <Link href={`/profile/${currentUser?.uid}`} className="flex items-center gap-2"><img src={avatarSrc} onError={(e:any)=>e.currentTarget.src=`https://i.pravatar.cc/100?u=${currentUser.uid}`} className="w-10 h-10 rounded-full border-2 border-[#00E5FF] object-cover bg-white/10"/><span className="font-bold text-sm text-white">{currentUser?.displayName || 'مستخدم'}</span></Link>
-          <div className="relative"><button onClick={()=>setShowDesktopContacts(!showDesktopContacts)} className="relative w-10 h-10 rounded-full bg-[#00E5FF]/20 border border-[#00E5FF]/30 flex items-center justify-center"><Circle className="w-5 h-5 text-[#00E5FF] fill-[#00E5FF]" />{onlineCount>0 && <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center">{onlineCount}</span>}</button>{showDesktopContacts && (<div className="absolute top-[48px] right-0 w-[320px] max-h-[400px] overflow-y-auto bg-[#0B1418] border border-white/10 rounded-2xl shadow-2xl p-3 z-[200]"><div className="flex items-center justify-between mb-3"><h2 className="font-bold text-white text-sm">متصلون الآن ({onlineCount})</h2><button onClick={()=>setShowDesktopContacts(false)} className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><X className="w-4 h-4 text-white"/></button></div>{onlineUsers.length===0 && <p className="text-gray-400 text-sm text-center py-6">لا يوجد متصلون حاليا</p>}{onlineUsers.map((u:any)=><div key={u.id} onClick={()=>{router.push(`/profile/${u.id}`); setShowDesktopContacts(false);}} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer"><img src={u.avatar||u.photoURL||`https://i.pravatar.cc/100?u=${u.id}`} className="w-9 h-9 rounded-full bg-white/10 object-cover"/><div><p className="text-sm font-bold text-white">{u.displayName||'مستخدم'}</p><p className="text-[11px] text-green-400">• متصل الآن</p></div></div>)}</div>)}</div>
+          <div className="relative"><button onClick={()=>setShowDesktopContacts(!showDesktopContacts)} className="relative w-10 h-10 rounded-full bg-[#00E5FF]/20 border border-[#00E5FF]/30 flex items-center justify-center"><Circle className="w-5 h-5 text-[#00E5FF] fill-[#00E5FF]" />{onlineCount>0 && <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center">{onlineCount}</span>}</button>{showDesktopContacts && (<div className="absolute top-[48px] right-0 w-[320px] max-h-[400px] overflow-y-auto bg-[#0B1418] border border-white/10 rounded-2xl shadow-2xl p-3 z-[200]"><div className="flex items-center justify-between mb-3"><h2 className="font-bold text-white text-sm">متصلون الآن ({onlineCount})</h2><button onClick={()=>setShowDesktopContacts(false)} className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><X className="w-4 h-4 text-white"/></button></div>{onlineUsers.length===0 && <p className="text-gray-400 text-sm text-center py-6">لا يوجد متصلون حاليا</p>}{onlineUsers.map((u:any)=><div key={u.id} onClick={()=> handleUserClick(u.id)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer"><img src={u.avatar||u.photoURL||`https://i.pravatar.cc/100?u=${u.id}`} className="w-9 h-9 rounded-full bg-white/10 object-cover"/><div><p className="text-sm font-bold text-white">{u.displayName||'مستخدم'}</p><p className="text-[11px] text-green-400">• متصل الآن</p></div></div>)}</div>)}</div>
           <Link href="/messages" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-5 h-5 text-white"/>{msgCount>0 && <span className="absolute -top-1 -right-1 bg-[#00E5FF] text-black text-[11px] w-5 h-5 rounded-full flex items-center justify-center font-bold">{msgCount>9?'9+':msgCount}</span>}</Link>
           <Link href="/friends" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Users className="w-5 h-5 text-white"/>{reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center">{reqCount}</span>}</Link>
           <Link href="/notifications" className="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Bell className="w-5 h-5 text-white"/>{notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse">{notifCount}</span>}</Link>
@@ -79,7 +103,7 @@ export default function FixedHeaderWrapper(){
       <header dir="rtl" className="flex lg:hidden items-center justify-between px-3 py-3 bg-[#122025]/95 backdrop-blur-xl border-b border-[#1A2E35]">
         <div className="flex items-center gap-2"><Link href={`/profile/${currentUser?.uid}`}><img src={avatarSrc} onError={(e:any)=>e.currentTarget.src=`https://i.pravatar.cc/100?u=${currentUser.uid}`} className="w-9 h-9 rounded-full border-2 border-[#00E5FF] object-cover bg-white/10"/></Link><button onClick={()=>setShowContacts(true)} className="relative w-8 h-8 rounded-full bg-[#00E5FF]/20 border border-[#00E5FF]/30 flex items-center justify-center"><Circle className="w-4 h-4 text-[#00E5FF] fill-[#00E5FF]" />{onlineCount>0 && <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center">{onlineCount}</span>}</button><Link href="/messages" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><MessageCircle className="w-4 h-4 text-white"/>{msgCount>0 && <span className="absolute -top-1 -right-1 bg-[#00E5FF] text-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{msgCount>9?'9+':msgCount}</span>}</Link><Link href="/friends" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Users className="w-4 h-4 text-white"/>{reqCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{reqCount}</span>}</Link><Link href="/notifications" className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Bell className="w-4 h-4 text-white"/>{notifCount>0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">{notifCount>9?'9+':notifCount}</span>}</Link></div><div className="flex items-center gap-2"><h1 className="font-black text-[18px] text-white">Posta<span className="text-[#00E5FF]">tee</span></h1><div className="w-8 h-8 bg-[#00E5FF] rounded-lg flex items-center justify-center text-black font-black">P</div></div>
       </header>
-      {showContacts && (<div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm lg:hidden" onClick={()=>setShowContacts(false)}><div className="absolute right-0 top-0 h-full w-[85%] max-w-[360px] bg-[#122025] border-l border-white/10 p-4 overflow-y-auto" onClick={e=>e.stopPropagation()}><div className="flex items-center justify-between mb-4"><h2 className="font-bold text-white">متصلون الآن ({onlineCount})</h2><button onClick={()=>setShowContacts(false)} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><X className="w-4 h-4 text-white"/></button></div>{onlineUsers.length===0 && <p className="text-gray-400 text-sm text-center mt-10">لا يوجد متصلون حاليا</p>}{onlineUsers.map((u:any)=><div key={u.id} onClick={()=>{router.push(`/profile/${u.id}`); setShowContacts(false);}} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer"><img src={u.avatar||u.photoURL||`https://i.pravatar.cc/100?u=${u.id}`} className="w-10 h-10 rounded-full bg-white/10 object-cover"/><div><p className="text-sm font-bold text-white">{u.displayName||'مستخدم'}</p><p className="text-[11px] text-green-400">• متصل الآن</p></div></div>)}</div></div>)}
+      {showContacts && (<div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm lg:hidden" onClick={()=>setShowContacts(false)}><div className="absolute right-0 top-0 h-full w-[85%] max-w-[360px] bg-[#122025] border-l border-white/10 p-4 overflow-y-auto" onClick={e=>e.stopPropagation()}><div className="flex items-center justify-between mb-4"><h2 className="font-bold text-white">متصلون الآن ({onlineCount})</h2><button onClick={()=>setShowContacts(false)} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><X className="w-4 h-4 text-white"/></button></div>{onlineUsers.length===0 && <p className="text-gray-400 text-sm text-center mt-10">لا يوجد متصلون حاليا</p>}{onlineUsers.map((u:any)=><div key={u.id} onClick={()=> handleUserClick(u.id)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer"><img src={u.avatar||u.photoURL||`https://i.pravatar.cc/100?u=${u.id}`} className="w-10 h-10 rounded-full bg-white/10 object-cover"/><div><p className="text-sm font-bold text-white">{u.displayName||'مستخدم'}</p><p className="text-[11px] text-green-400">• متصل الآن</p></div></div>)}</div></div>)}
       {showDesktopContacts && <div className="fixed inset-0 z-[90] hidden lg:block" onClick={()=>setShowDesktopContacts(false)}></div>}
     </div>
   )

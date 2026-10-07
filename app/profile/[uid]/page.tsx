@@ -9,6 +9,9 @@ import { processImage } from "@/lib/imageProcessor";
 import Link from "next/link";
 import { useLiveUser } from "@/lib/hooks/useLiveUser";
 
+const DEFAULT_COVER = "/default-cover.jpg";
+const DEFAULT_AVATAR = "/default-avatar.png";
+
 const getNameColor = (role:string) => {
   const cleanRole = (role||"").trim();
   if(cleanRole === "مؤسس") return "text-cyan-400";
@@ -157,10 +160,9 @@ export default function ProfileWall() {
       } else {
         compressed = await processImage(file, type);
       }
-      // ✅ القاعدة الذهبية - ما بنلمس displayName نهائيا هنا
       await updateDoc(doc(db, 'users', targetUid), {
         [type]: compressed,
-       ...(type === 'avatar'? { photoURL: compressed, avatar: compressed, photo: compressed } : { cover: compressed }),
+      ...(type === 'avatar'? { photoURL: compressed, avatar: compressed, photo: compressed } : { cover: compressed }),
         lastSeen: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -185,19 +187,19 @@ export default function ProfileWall() {
         <div className="w-9"/>
       </header>
 
-      {/* ✅ الغلاف - شلت overflow-hidden */}
+      {/* ✅ الغلاف - ديفولت فلكلور سوداني */}
       <div className="relative h-[200px] lg:h-[300px] w-full bg-white/5 group">
-        {displayUser.cover? <img src={displayUser.cover} className="w-full h-full object-cover object-center" alt="cover"/> : <div className="w-full h-full flex items-center justify-center text-white/20"><ImageIcon className="w-12 h-12"/></div>}
+        <img src={displayUser.cover || DEFAULT_COVER} className="w-full h-full object-cover object-center" alt="cover"/>
         {uploading==='cover' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20"><Loader2 className="w-8 h-8 text-white animate-spin"/></div>}
         {isMine && (<button onClick={() => pickImage('cover')} className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur px-3 py-2 rounded-full border border-white/30 flex items-center gap-2 text-xs font-bold hover:bg-black/90 transition"><Camera className="w-4 h-4"/> تعديل الغلاف</button>)}
       </div>
 
-      {/* ✅ الافاتار برا الغلاف - عشان زر الكاميرا ما يتقص */}
+      {/* ✅ الافاتار برا الغلاف */}
       <div className="max-w-[600px] mx-auto px-6 relative h-[50px]">
         <div className="absolute -top-12 right-6 flex items-end gap-4 z-20">
           <div className="relative">
             <div className="w-24 h-24 lg:w-28 lg:h-28 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden shadow-xl">
-              {displayUser.avatar? <img src={displayUser.avatar} className="w-full h-full object-cover"/> : <User className="w-10 h-10 text-white/30 m-6"/>}
+              <img src={displayUser.avatar || DEFAULT_AVATAR} className="w-full h-full object-cover" alt="avatar"/>
               {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
             </div>
             {liveUser?.reallyOnline && <span className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 rounded-full border-[3px] border-[#050a0a]"></span>}
