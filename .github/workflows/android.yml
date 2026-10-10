@@ -8,16 +8,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-      - run: npm run build || npx next build
-      - run: npx cap sync android || echo "no cap"
+      - name: Install dependencies
+        run: npm install
+      - name: Build Next.js
+        run: npm run build || npx next build
+      - name: Setup Capacitor Android
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android || true
+          npx cap init postatee com.postatee.app --web-dir=out || true
+          npx cap add android || true
+          npx cap sync android || true
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
       - name: Build APK
         working-directory: android
-        run: chmod +x gradlew &&./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+         ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug
