@@ -14,25 +14,29 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Setup Capacitor Config
-        run: |
-          echo '{"appId":"com.example.app","appName":"MyApp","webDir":"www","bundledWebRuntime":false}' > capacitor.config.json
-          if [ ! -d "www" ]; then mkdir www; echo "<h1>My App</h1>" > www/index.html; fi
-          ls -la
-          cat capacitor.config.json
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android
+      - name: Build Next.js App
         run: |
-          npx cap add android || true
+          npm install
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          echo '{"appId":"com.myapp.next","appName":"MyApp","webDir":"out","bundledWebRuntime":false}' > capacitor.config.json
+          npm run build || npx next build
+          ls -la
+          if [ ! -d "out" ]; then
+            echo "out folder not found, trying to create export"
+            mkdir -p out
+            echo "<html><body><h1>Build failed - check logs</h1></body></html>" > out/index.html
+          fi
+          ls -la out
+
+      - name: Add Android Platform
+        run: |
+          npx cap add android
           npx cap sync
 
       - name: Build APK
