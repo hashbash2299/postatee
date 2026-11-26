@@ -1,6 +1,4 @@
-export function generateStaticParams() {
-  return [{ id: "0" }];
-}
+export const dynamic = "force-dynamic"
 
 import ChatRoomClient from "./ChatRoomClient";
 
