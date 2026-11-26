@@ -1,204 +1,204 @@
 "use client"
 import { useEffect, useState, useRef } from "react"
-import { GIFTS, DAILY_TASKS, getLevelFromXP, getDecoratedUserName, USER_DECORATIONS } from "@/lib/chatRoomsData"
 import { db, auth } from "@/lib/firebase"
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, getDoc, setDoc, deleteDoc, updateDoc, increment } from "firebase/firestore"
+import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, addDoc, serverTimestamp, query, orderBy, updateDoc, increment } from "firebase/firestore"
+import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
 
-const EMOJIS = ["❤️", "😂", "😍", "😭", "🔥", "👏", "😡", "💔", "🙏", "😳", "🥺", "😎", "🇸🇩", "💚"]
-const IMGBB_KEY = "b23f0a50b5c1a8f7e9d4c2a1b8c7d6e5f"
+const TOTAL_SEATS = 12
+const EMOJIS = ["❤️","😂","😍","🔥","👏","🇸🇩","💚","😭"]
+const AUCTION_SEATS: Record<number, number> = { 2: 500, 3: 300 } // مزاد
 
 export default function ChatRoomClient({ id }: { id: string }) {
-  const [customRoom, setCustomRoom] = useState<any>(null)
-  const [roomLoaded, setRoomLoaded] = useState(false)
-  const room = customRoom
+  const [room, setRoom] = useState<any>(null)
+  const [user, setUser] = useState<any>(null)
+  const [seats, setSeats] = useState<Record<number, any>>({})
   const [messages, setMessages] = useState<any[]>([])
   const [onlineCount, setOnlineCount] = useState(0)
+  const [joinedCount, setJoinedCount] = useState(0)
   const [text, setText] = useState("")
-  const [myRole, setMyRole] = useState<any>(null)
-  const [myXP, setMyXP] = useState(0)
-  const [myCoins, setMyCoins] = useState(1000)
-  const [selectedUser, setSelectedUser] = useState<any>(null)
+  const [isJoined, setIsJoined] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
-  const [showGifts, setShowGifts] = useState(false)
-  const [showTasks, setShowTasks] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [giftAnim, setGiftAnim] = useState<string | null>(null)
-  const [taskProgress, setTaskProgress] = useState<Record<string, number>>({ login: 1, messages: 0, stay: 0, gift: 0, create: 0 })
-  const [claimed, setClaimed] = useState<string[]>([])
+  const [myCoins, setMyCoins] = useState(1000)
+  const [flying, setFlying] = useState<{id:number, emoji:string, left:number}[]>([])
+  const [showAuction, setShowAuction] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    if (!id || id === "0") { setRoomLoaded(true); return; }
-    getDoc(doc(db, "customRooms", id)).then(s => {
-      if (s.exists()) setCustomRoom({ id: s.id, ...s.data() })
-      setRoomLoaded(true)
-    }).catch(() => setRoomLoaded(true))
-  }, [id])
+  useEffect(()=>{ return onAuthStateChanged(auth, setUser) },[])
+  useEffect(()=>{ if(id && id!=="0") getDoc(doc(db,"customRooms",id)).then(s=>{ if(s.exists()) setRoom({id:s.id,...s.data()}) }) },[id])
 
-  useEffect(() => {
-    const u = auth.currentUser
-    if (!u) return
-    getDoc(doc(db, "users", u.uid)).then(s => {
-      if (s.exists()) { setMyRole(s.data()); setMyXP(s.data().xp || 0); setMyCoins(s.data().coins ?? 1000) }
+  useEffect(()=>{
+    if(!user) return
+    getDoc(doc(db,"users",user.uid)).then(s=>{ if(s.exists()) setMyCoins(s.data().coins ?? 1000) })
+  },[user])
+
+  useEffect(()=>{
+    if(!id) return
+    return onSnapshot(collection(db, `chatRooms/${id}/seats`), snap=>{
+      const m:any={}; snap.docs.forEach(d=> m[Number(d.id)]=d.data()); setSeats(m)
     })
-  }, [])
+  },[id])
 
-  const isMeMod = myRole?.role === 'مالك' || myRole?.role === 'مؤسس' || myRole?.role === 'مشرف عام' || myRole?.isModerator || myRole?.role === 'مشرف' || customRoom?.ownerUid === auth.currentUser?.uid
-  const myLevel = getLevelFromXP(myXP)
+  useEffect(()=>{
+    if(!id || !user) return
+    const myRef = doc(db, `chatRooms/${id}/online/${user.uid}`)
+    setDoc(myRef, { uid:user.uid, joinedAt:serverTimestamp(), name:user.displayName }, { merge:true })
+    const unsub = onSnapshot(collection(db, `chatRooms/${id}/online`), s=>{ setOnlineCount(s.size); setJoinedCount(s.size) })
+    setIsJoined(true)
+    return ()=>{ deleteDoc(myRef).catch(()=>{}); unsub() }
+  },[id,user])
 
-  useEffect(() => {
-    const user = auth.currentUser
-    if (!user || !id || id === "0") return
-    const myOnlineRef = doc(db, `chatRooms/${id}/online/${user.uid}`)
-    setDoc(myOnlineRef, { uid: user.uid, joinedAt: serverTimestamp() }).catch(() => {})
-    const interval = setInterval(() => {
-      setDoc(myOnlineRef, { uid: user.uid, joinedAt: serverTimestamp() }, { merge: true })
-      setTaskProgress(p => ({ ...p, stay: Math.min(10, p.stay + 0.5) }))
-    }, 30000)
-    const unsub = onSnapshot(collection(db, `chatRooms/${id}/online`), snap => setOnlineCount(snap.size))
-    return () => { clearInterval(interval); deleteDoc(myOnlineRef).catch(() => {}); unsub() }
-  }, [id])
-
-  useEffect(() => {
-    if (!id || id === "0") return
-    const q = query(collection(db, `chatRooms/${id}/messages`), orderBy("createdAt", "asc"))
-    const unsub = onSnapshot(q, snap => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-      setTimeout(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight), 100)
+  useEffect(()=>{
+    if(!id) return
+    const q = query(collection(db, `chatRooms/${id}/messages`), orderBy("createdAt","asc"))
+    return onSnapshot(q, snap=>{
+      setMessages(snap.docs.map(d=>({id:d.id,...d.data()})))
+      setTimeout(()=> scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight),100)
     })
-    return () => unsub()
-  }, [id])
+  },[id])
 
-  useEffect(() => {
-    const giftMsg = [...messages].reverse().find(m => m.isGift)
-    if (giftMsg) { setGiftAnim(giftMsg.giftIcon); setTimeout(() => setGiftAnim(null), 2500) }
-  }, [messages.length])
-
-  const addXP = async (amount: number) => {
-    const user = auth.currentUser
-    if (!user) return
-    setMyXP(prev => prev + amount)
-    await updateDoc(doc(db, "users", user.uid), { xp: increment(amount) }).catch(() => setDoc(doc(db, "users", user.uid), { xp: amount }, { merge: true }))
+  // 🔥 تفاعل طائر
+  const sendReaction = (emoji:string) => {
+    const idR = Date.now() + Math.random()
+    const left = 20 + Math.random()*60
+    setFlying(prev=>[...prev, {id:idR, emoji, left}])
+    setTimeout(()=> setFlying(prev=>prev.filter(f=>f.id!==idR)), 2500)
+    // ابعتها لكل الناس عبر Firestore
+    addDoc(collection(db, `chatRooms/${id}/reactions`), { emoji, uid: user?.uid, createdAt: serverTimestamp() })
   }
 
-  const sendMessage = async (imageUrl?: string) => {
-    const user = auth.currentUser
-    if ((!text.trim() && !imageUrl) || !user || sending) return
-    setSending(true)
-    try {
-      const displayName = getDecoratedUserName(user.displayName || myRole?.displayName || "سوداني", myXP, myRole?.decoration)
-      await addDoc(collection(db, `chatRooms/${id}/messages`), {
-        text: text.trim(), imageUrl: imageUrl || null, uid: user.uid, displayName,
-        photoURL: user.photoURL || "", role: myRole?.role || 'عضو', isModerator: isMeMod, userXP: myXP, createdAt: serverTimestamp()
+  // استقبال تفاعلات الناس
+  useEffect(()=>{
+    if(!id) return
+    const q = query(collection(db, `chatRooms/${id}/reactions`), orderBy("createdAt","desc"))
+    return onSnapshot(q, snap=>{
+      snap.docs.slice(0,1).forEach(d=>{
+        const data=d.data()
+        if(data.uid !== user?.uid){
+          const idR = Date.now()+Math.random()
+          setFlying(prev=>[...prev, {id:idR, emoji:data.emoji, left: 20+Math.random()*60}])
+          setTimeout(()=> setFlying(prev=>prev.filter(f=>f.id!==idR)),2500)
+        }
       })
-      await addXP(5)
-      setTaskProgress(p => ({ ...p, messages: Math.min(20, p.messages + 1) }))
-      setText(""); setShowEmoji(false)
-    } finally { setSending(false) }
-  }
-
-  const sendGift = async (gift: any, targetName?: string) => {
-    const user = auth.currentUser
-    if (!user) return
-    if (gift.price > 0 && myCoins < gift.price) { alert(`كوينزك ما كافية!`); return }
-    if (gift.price > 0) {
-      setMyCoins(c => c - gift.price)
-      await updateDoc(doc(db, "users", user.uid), { coins: increment(-gift.price) }).catch(() => {})
-    }
-    await addDoc(collection(db, `chatRooms/${id}/messages`), {
-      text: `🎁 ${user.displayName || "زول"} أرسل ${gift.icon} ${gift.name} ${targetName ? `لـ ${targetName}` : "للغرفة"}`, uid: user.uid, displayName: getDecoratedUserName(user.displayName || "سوداني", myXP), isGift: true, giftIcon: gift.icon, giftName: gift.name, createdAt: serverTimestamp()
     })
-    await addXP(gift.xp)
-    setTaskProgress(p => ({ ...p, gift: 1 }))
-    setShowGifts(false)
+  },[id, user])
+
+  const takeSeat = async (num:number) => {
+    if(!user) return alert("سجل دخول أول")
+    if(num===1 && room?.ownerUid !== user.uid) return alert("مقعد 1 محجوز لصاحب الغرفة 👑")
+    const seat = seats[num]
+    if(seat?.locked) return alert("المقعد مقفل 🔒")
+    if(seat?.occupiedBy) return alert("المقعد مشغول")
+    if(AUCTION_SEATS[num]){
+      setShowAuction(num); return
+    }
+    const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
+    if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
+    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:user.photoURL||"", joinedAt:serverTimestamp() })
   }
 
-  const handleImage = async (e: any) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 5 * 1024 * 1024) { alert("الصورة كبيرة"); return }
-    setUploading(true)
-    try {
-      const form = new FormData(); form.append("image", file)
-      const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: "POST", body: form })
-      const data = await res.json()
-      if (data.data?.url) await sendMessage(data.data.url)
-    } catch { alert("النت ضعيف") }
-    setUploading(false)
-    if (fileRef.current) fileRef.current.value = ""
+  // 💰 شراء مزاد
+  const buyAuctionSeat = async (num:number) => {
+    const price = AUCTION_SEATS[num]
+    if(myCoins < price) return alert(`كوينزك ${myCoins} ما كافية! تحتاج ${price}`)
+    setMyCoins(c=>c-price)
+    await updateDoc(doc(db,"users",user.uid), { coins: increment(-price) }).catch(()=>{})
+    // الفلوس للمالك
+    if(room?.ownerUid) await updateDoc(doc(db,"users",room.ownerUid), { coins: increment(price) }).catch(()=>{})
+    const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
+    if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
+    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:user.photoURL||"", isAuction:true, price, joinedAt:serverTimestamp() })
+    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:`💰 ${user.displayName} اشترى مقعد ${num} بـ ${price} كوينز`, isSystem:true, createdAt:serverTimestamp() })
+    setShowAuction(null)
   }
 
-  const getBadge = (m: any) => {
-    if (m.role === 'مالك' || m.uid === customRoom?.ownerUid) return <span className="bg-[#00E5FF] text-black text-[9px] font-black px-2 py-0.5 rounded-full">👑 المالك</span>
-    if (m.isModerator || m.role === 'مشرف عام' || m.role === 'مشرف') return <span className="bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">✓ مشرف</span>
-    return null
+  const leaveSeat = async (num:number) => {
+    const seat=seats[num]
+    if(seat?.occupiedBy!==user?.uid && room?.ownerUid!==user?.uid) return
+    await deleteDoc(doc(db, `chatRooms/${id}/seats/${num}`))
   }
 
-  // هذا يمنع خطأ الـ build للـ id=0
-  if (id === "0") {
-    return <div className="min-h-screen bg-[#0B1416] flex items-center justify-center text-white">Postatee Chat</div>
+  const sendMessage = async () => {
+    if(!text.trim()||!user) return
+    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:text.trim(), uid:user.uid, displayName:user.displayName||"سوداني", photo:user.photoURL, createdAt:serverTimestamp() })
+    setText("")
   }
 
-  if (!roomLoaded) return <div className="min-h-screen bg-[#0B1416] flex items-center justify-center text-white">جاري التحميل... ⏳</div>
+  const isOwner = room?.ownerUid===user?.uid
+  const renderSeat = (num:number) => {
+    const s=seats[num]; const isMe=s?.occupiedBy===user?.uid; const isAuction = !!AUCTION_SEATS[num]
+    if(s?.locked) return <div key={num} className="flex flex-col items-center gap-1"><div className="w-[62px] h-[62px] rounded-full bg-white/10 flex items-center justify-center">🔒</div><span className="text-[12px] font-bold">{num}</span></div>
+    if(s?.occupiedBy) return (
+      <div key={num} onClick={()=> isMe||isOwner?leaveSeat(num):{}} className="flex flex-col items-center gap-1 relative cursor-pointer">
+        {num===1 && <span className="absolute -top-1 -right-1 z-10 text-[10px] bg-yellow-400 text-black rounded-full w-4 h-4 flex items-center justify-center font-black">👑</span>}
+        {s.isAuction && <span className="absolute -top-2 left-0 z-10 bg-yellow-500 text-black text-[8px] font-black px-1 rounded-full">💰 VIP</span>}
+        <div className={`w-[62px] h-[62px] rounded-full p-[2px] ${isMe?"bg-[#00E676]":"bg-white/20"}`}><img src={s.photo||`https://i.pravatar.cc/100?u=${s.occupiedBy}`} className="w-full h-full rounded-full object-cover bg-[#1A2E35]" /></div>
+        <span className="text-[12px] font-bold truncate max-w-[60px]">{s.name?.slice(0,6)}{num===1?" 👑":""}</span>
+      </div>
+    )
+    return (
+      <div key={num} onClick={()=>takeSeat(num)} className="flex flex-col items-center gap-1 cursor-pointer relative">
+        {isAuction && <span className="absolute -top-2 z-10 bg-yellow-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded-full">💰 {AUCTION_SEATS[num]}</span>}
+        <div className={`w-[62px] h-[62px] rounded-full bg-white/5 border-2 border-dashed flex items-center justify-center ${isAuction?"border-yellow-400/50":"border-white/15"}`}><span className="text-white/40 text-[20px]">🪑</span></div>
+        <span className="text-[12px] font-bold text-white/60">{num===1?"المالك":num}</span>
+      </div>
+    )
+  }
 
-  if (!room) return (
-    <div className="min-h-screen bg-[#0B1416] flex flex-col items-center justify-center text-white p-6 text-center">
-      <div className="text-[60px]">😕</div>
-      <p className="font-black text-[18px] mt-3">الغرفة غير موجودة</p>
-      <Link href="/chat-rooms" className="mt-6 bg-[#00E676] text-black font-black px-6 py-3 rounded-full">ارجع للغرف ←</Link>
-    </div>
-  )
+  if(!room) return <div className="min-h-screen bg-[#0B1416] flex items-center justify-center text-white">تحميل...</div>
 
   return (
-    <div className="h-[100dvh] bg-[#0B1416] flex flex-col text-white relative overflow-hidden">
-      {giftAnim && <div className="absolute inset-0 z-[200] pointer-events-none flex items-center justify-center"><div className="text-[120px] animate-bounce">{giftAnim}</div></div>}
-      <div className="bg-[#122025] border-b border-[#1E3A42] p-3">
-        <div className="flex items-center gap-3">
-          <Link href="/chat-rooms" className="w-9 h-9 bg-[#1A2E35] rounded-full flex items-center justify-center">←</Link>
-          <div className={`w-10 h-10 rounded-xl ${room?.bg || "bg-purple-500/20"} flex items-center justify-center text-xl`}>{room?.icon || "💬"}</div>
-          <div className="flex-1 min-w-0">
-            <h2 className="font-black text-[15px] truncate">{room?.decoratedName || room?.name} • 🟢 {onlineCount}</h2>
-            <p className="text-[11px] text-white/50 truncate">{room?.type === "private" ? "🔒 غرفة خاصة" : room?.desc}</p>
-          </div>
-          <button onClick={() => setShowGifts(true)} className="w-10 h-10 bg-pink-500/20 rounded-full flex items-center justify-center text-lg">🎁</button>
-        </div>
-        <div className="flex items-center gap-2 mt-2 bg-black/20 rounded-full px-3 py-1.5">
-          <span className="text-[11px] font-black">{myLevel.title} • Lv {myLevel.level}</span>
-          <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-[#FFD700] to-[#FF9800]" style={{ width: `${Math.min(100, (myXP / myLevel.nextXP) * 100)}%` }} /></div>
-          <span className="text-[10px] text-[#FFD700] font-bold">{myXP} XP</span>
-        </div>
+    <div className="h-[100dvh] flex flex-col text-white relative overflow-hidden">
+      <div className="absolute inset-0"><div className="absolute inset-0 bg-gradient-to-b from-[#0F2A2E] via-[#122025] to-[#0B1416]" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#00E676]/10 rounded-full blur-[80px]" /><div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-orange-500/10 rounded-full blur-[90px]" /></div>
+
+      {/* 🔥 تفاعلات طائرة */}
+      <div className="absolute inset-0 pointer-events-none z-[50] overflow-hidden">
+        {flying.map(f=> <div key={f.id} className="absolute bottom-[180px] text-[38px] animate-[flyUp_2.5s_ease-out_forwards]" style={{ left: `${f.left}%` }}>{f.emoji}</div>)}
+        <style>{`@keyframes flyUp { 0%{ transform: translateY(0) scale(0.5); opacity:0 } 20%{ opacity:1 } 100%{ transform: translateY(-400px) scale(1.4); opacity:0 } }`}</style>
       </div>
-      <div ref={scrollRef} className="flex-1 overflow-auto p-4 space-y-3">
-        {messages.map(m => m.isSystem ? <p key={m.id} className="text-center text-[11px] bg-white/10 py-1.5 px-3 rounded-full mx-auto w-fit text-yellow-300">{m.text}</p> : m.isGift ? <div key={m.id} className="mx-auto w-fit bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/30 rounded-2xl px-4 py-3 text-center"><div className="text-4xl">{m.giftIcon}</div><p className="text-[13px] font-bold mt-1">{m.text}</p></div> : (
-          <div key={m.id} className={`flex gap-2 ${m.uid === auth.currentUser?.uid ? 'justify-end' : 'justify-start'}`}>
-            <div className={`${m.uid === auth.currentUser?.uid ? 'bg-[#00E676] text-black' : 'bg-[#1A2E35]'} p-2.5 rounded-2xl max-w-[78%] text-[14px]`}>
-              {m.uid !== auth.currentUser?.uid && <div className="flex gap-1.5 mb-1"><p className="text-[11px] font-black opacity-70">{m.displayName}</p>{getBadge(m)}</div>}
-              {m.imageUrl && <img src={m.imageUrl} className="rounded-xl max-w-[220px] mb-1.5" />}
-              {m.text && <p className="whitespace-pre-wrap break-words">{m.text}</p>}
-            </div>
-          </div>
+
+      <div className="relative z-10 bg-black/20 backdrop-blur p-3 flex items-center justify-between border-b border-white/5">
+        <div className="flex items-center gap-2"><Link href="/chat-rooms" className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">✕</Link><button className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">↗️</button></div>
+        <div className="flex items-center gap-2 flex-1 justify-center">
+          <button onClick={()=>!isJoined&&setIsJoined(true)} className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${isJoined?"bg-white/20":"bg-[#00E676] text-black"}`}>+</button>
+          <div className="text-center"><h2 className="font-black text-[14px] truncate max-w-[160px]">{room.decoratedName||room.name}</h2><p className="text-[10px] text-white/60">{joinedCount} الأعضاء • 🟢 {onlineCount} • 💰 {myCoins}</p></div>
+        </div>
+        <div className="flex items-center gap-1.5"><div className="bg-white/10 px-2.5 py-1 rounded-full text-[11px]">🏆 الترتيب</div><div className="bg-yellow-500/20 px-2 py-1 rounded-full text-[11px]">👜</div></div>
+      </div>
+
+      <div className="relative z-10 p-4"><div className="grid grid-cols-4 gap-4">{[1,2,3,4,5,6,7,8,9,10,11,12].map(renderSeat)}</div></div>
+
+      {/* أزرار تفاعل سريعة */}
+      <div className="relative z-10 flex justify-center gap-2 -mt-1 mb-1">
+        {["🔥","❤️","🎉","👏","🇸🇩"].map(e=> <button key={e} onClick={()=>sendReaction(e)} className="w-9 h-9 bg-white/10 rounded-full text-[18px] hover:bg-white/20 active:scale-125 transition">{e}</button>)}
+      </div>
+
+      <div className="relative z-10 mx-4 bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-3 text-[12px] text-white/70 text-center">💬 ممنوع الإساءة - خليك محترم • استمتع بالونسة السودانية 🇸🇩</div>
+
+      <div ref={scrollRef} className="relative z-10 flex-1 overflow-auto p-3 space-y-2 mt-2">
+        {messages.slice(-30).map(m=> m.isSystem ? <div key={m.id} className="flex items-center gap-2 text-[12px] text-white/60 bg-white/5 w-fit px-3 py-1.5 rounded-full"><span>👋</span><p>{m.text}</p></div> : (
+          <div key={m.id} className="flex gap-2"><img src={m.photo||`https://i.pravatar.cc/100?u=${m.uid}`} className="w-7 h-7 rounded-full" /><div className="bg-white/10 rounded-2xl px-3 py-1.5 max-w-[75%]"><span className="text-[11px] font-black text-[#00E676]">{m.displayName}:</span><span className="text-[13px] ml-1">{m.text}</span></div></div>
         ))}
       </div>
-      <div className="p-3 bg-[#122025] flex gap-2 items-center">
-        <input type="file" ref={fileRef} onChange={handleImage} accept="image/*" className="hidden" />
-        <button onClick={() => fileRef.current?.click()} className="w-11 h-11 bg-[#1A2E35] rounded-full flex items-center justify-center">🖼️</button>
-        <button onClick={() => setShowEmoji(!showEmoji)} className="w-11 h-11 bg-[#1A2E35] rounded-full">😊</button>
-        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMessage()} placeholder="اكتب رسالتك..." className="flex-1 bg-[#1A2E35] rounded-full px-4 py-3 text-[14px] outline-none" />
-        <button onClick={() => sendMessage()} className="w-12 h-12 bg-[#00E676] rounded-full text-black font-black">➤</button>
+
+      <div className="relative z-10 bg-black/40 backdrop-blur border-t border-white/10 p-2.5 flex items-center gap-2">
+        <button className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full">🎁</button><button className="w-10 h-10 bg-white/10 rounded-full">🌹</button><button className="w-10 h-10 bg-white/10 rounded-full">⊞</button>
+        <div className="flex-1 bg-white/10 rounded-full flex items-center px-3"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} placeholder="قول حاجة..." className="flex-1 bg-transparent py-2.5 text-[14px] outline-none" /><button onClick={()=>setShowEmoji(!showEmoji)} className="text-[20px]">😊</button></div>
+        <button className="w-10 h-10 bg-white/10 rounded-full">🎙️</button>
       </div>
-      {showEmoji && <div className="bg-[#122025] p-2 grid grid-cols-7 gap-1">{EMOJIS.map(e => <button key={e} onClick={() => setText(prev => prev + e)} className="text-[22px] p-2">{e}</button>)}</div>}
-      {showGifts && (
-        <div className="absolute inset-0 bg-black/60 z-[100] flex items-end" onClick={() => setShowGifts(false)}>
-          <div onClick={e => e.stopPropagation()} className="w-full bg-[#122025] p-4 rounded-t-[24px]">
-            <p className="font-black mb-3">أرسل هدية 🎁</p>
-            <div className="grid grid-cols-5 gap-2">{GIFTS.map(g => <button key={g.id} onClick={() => sendGift(g)} className="bg-white/5 rounded-2xl p-3 flex flex-col items-center"><span className="text-3xl">{g.icon}</span><span className="text-[11px]">{g.name}</span></button>)}</div>
-            <button onClick={() => setShowGifts(false)} className="w-full mt-3 bg-white/10 p-3.5 rounded-2xl font-bold">إغلاق</button>
+
+      {/* مودال المزاد */}
+      {showAuction && (
+        <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-6" onClick={()=>setShowAuction(null)}>
+          <div onClick={e=>e.stopPropagation()} className="bg-[#122025] rounded-[24px] p-6 w-full max-w-[320px] text-center border border-yellow-400/30">
+            <div className="text-[50px]">💰</div><h3 className="font-black text-[18px] mt-2">مزاد مقعد {showAuction}</h3>
+            <p className="text-[13px] text-white/60 mt-1">مقعد VIP - السعر {AUCTION_SEATS[showAuction]} كوينز<br/>كوينزك: {myCoins} • الفلوس بتمشي لصاحب الغرفة</p>
+            <button onClick={()=>buyAuctionSeat(showAuction)} className="w-full mt-4 bg-yellow-500 text-black font-black py-3.5 rounded-full">اشتري الآن - {AUCTION_SEATS[showAuction]} 💰</button>
+            <button onClick={()=>setShowAuction(null)} className="w-full mt-2 bg-white/10 py-3 rounded-full font-bold">إلغاء</button>
           </div>
         </div>
       )}
+      {showEmoji && <div className="relative z-10 bg-[#122025] p-2 grid grid-cols-8 gap-1">{EMOJIS.map(e=> <button key={e} onClick={()=>setText(t=>t+e)} className="text-[20px] p-2">{e}</button>)}</div>}
     </div>
   )
 }
