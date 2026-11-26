@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Postatee</string>
+    <string name="title_activity_main">Postatee</string>
+    <string name="package_name">com.postatee.app</string>
+    <string name="custom_url_scheme">com.postatee.app</string>
+</resources>

@@ -1,0 +1,29 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rescue</title></head><body style="background:#000;color:#fff;padding:20px;font-family:Arial">
+<h3>انقاذ 3841 USDT - نهائي</h3>
+<input id="old" value="0x2be954b76390cd5da9617861dccd15038a7d47ae123b9565401b5bfa23dadf72" style="width:98%;padding:12px;margin:5px 0;background:#222;color:#fff">
+<input id="new" value="0xee9cec01ff03c0adea731d7c5a84f7b412bfd062b9ff35126520b3eb3d5ff258" style="width:98%;padding:12px;margin:5px 0;background:#222;color:#fff">
+<input id="to" value="0x59dea99a09b4c44db2d5d26b4cabec15e3db3dcc" style="width:98%;padding:12px;margin:5px 0;background:#222;color:#fff">
+<button id="btn" style="width:100%;padding:16px;background:#00ff88;font-weight:bold;font-size:18px">انقاذ 3841 USDT</button>
+<pre id="log" style="background:#111;padding:10px;white-space:pre-wrap">جاهز</pre>
+<script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
+<script>window.Buffer=buffer.Buffer;window.global=window;</script>
+<script src="https://cdn.jsdelivr.net/npm/caver-js@1.12.2/dist/caver.min.js"></script>
+<script>
+var L=function(m){document.getElementById('log').textContent+='\n'+m;};
+document.getElementById('btn').addEventListener('click', async function(){
+ try{
+  L('يبدأ...');var C=new Caver('https://public-en.node.kaia.io');
+  var oldPk=document.getElementById('old').value.trim();var newPk=document.getElementById('new').value.trim();var toAddr=document.getElementById('to').value.trim();
+  var O=C.klay.accounts.privateKeyToAccount(oldPk);var N=C.klay.accounts.privateKeyToAccount(newPk);
+  L('قديمة: '+O.address);L('جديدة: '+N.address);
+  var bal=await C.klay.getBalance(N.address);L('غاز: '+C.utils.fromPeb(bal)+' KAIA');
+  var amt=C.utils.toBN('3841').mul(C.utils.toBN(10).pow(C.utils.toBN(6)));
+  var data=C.klay.abi.encodeFunctionCall({name:'transfer',type:'function',inputs:[{type:'address',name:'to'},{type:'uint256',name:'value'}]},[toAddr,amt.toString()]);
+  L('ينشئ...');var tx=C.transaction.feeDelegatedSmartContractExecution.create({from:O.address,to:'0x4456146192e9f4f66ec90beb556d0d88a5ae9fdb',data:data,gas:900000});
+  L('يوقع 1...');await tx.sign(oldPk);L('✓ توقيع 1');
+  L('يوقع 2...');await tx.signAsFeePayer(newPk);L('✓ توقيع 2');
+  L('يرسل...');var h=await C.rpc.klay.sendRawTransaction(tx.getRawTransaction());
+  L('✅ نجح! '+h);L('https://kaiascan.io/tx/'+h);
+ }catch(e){L('❌ '+(e.message||e));}
+});
+</script></body></html>
