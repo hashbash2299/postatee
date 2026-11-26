@@ -25,7 +25,22 @@ export default function ChatRoomClient({ id }: { id: string }) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(()=>{ return onAuthStateChanged(auth, setUser) },[])
-  useEffect(()=>{ if(id && id!=="0") getDoc(doc(db,"customRooms",id)).then(s=>{ if(s.exists()) setRoom({id:s.id,...s.data()}) }) },[id])
+
+  // ✅ التعديل 1: كان بيقرا من customRooms بس - هسه بيقرا من الاتنين
+  useEffect(()=>{
+    if(!id) return
+    const load = async () => {
+      // جرب customRooms أول
+      let snap = await getDoc(doc(db, "customRooms", id))
+      if(snap.exists()){ setRoom({id: snap.id, ...snap.data()}); return }
+      // لو ما لقاها جرب chatRooms - دي غرفة مملكة القلوب
+      snap = await getDoc(doc(db, "chatRooms", id))
+      if(snap.exists()){ setRoom({id: snap.id, ...snap.data()}); return }
+      // لو لسه ما لقاها - اعمل غرفة افتراضية عشان ما تدي 404
+      setRoom({ id, name: "مملكة القلوب", decoratedName: "مملكة القلوب ❤️", ownerUid: user?.uid })
+    }
+    load()
+  },[id])
 
   useEffect(()=>{
     if(!user) return
@@ -63,7 +78,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
     const left = 20 + Math.random()*60
     setFlying(prev=>[...prev, {id:idR, emoji, left}])
     setTimeout(()=> setFlying(prev=>prev.filter(f=>f.id!==idR)), 2500)
-    // ابعتها لكل الناس عبر Firestore
     addDoc(collection(db, `chatRooms/${id}/reactions`), { emoji, uid: user?.uid, createdAt: serverTimestamp() })
   }
 
@@ -103,7 +117,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
     if(myCoins < price) return alert(`كوينزك ${myCoins} ما كافية! تحتاج ${price}`)
     setMyCoins(c=>c-price)
     await updateDoc(doc(db,"users",user.uid), { coins: increment(-price) }).catch(()=>{})
-    // الفلوس للمالك
     if(room?.ownerUid) await updateDoc(doc(db,"users",room.ownerUid), { coins: increment(price) }).catch(()=>{})
     const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
     if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
@@ -151,7 +164,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
     <div className="h-[100dvh] flex flex-col text-white relative overflow-hidden">
       <div className="absolute inset-0"><div className="absolute inset-0 bg-gradient-to-b from-[#0F2A2E] via-[#122025] to-[#0B1416]" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#00E676]/10 rounded-full blur-[80px]" /><div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-orange-500/10 rounded-full blur-[90px]" /></div>
 
-      {/* 🔥 تفاعلات طائرة */}
       <div className="absolute inset-0 pointer-events-none z-[50] overflow-hidden">
         {flying.map(f=> <div key={f.id} className="absolute bottom-[180px] text-[38px] animate-[flyUp_2.5s_ease-out_forwards]" style={{ left: `${f.left}%` }}>{f.emoji}</div>)}
         <style>{`@keyframes flyUp { 0%{ transform: translateY(0) scale(0.5); opacity:0 } 20%{ opacity:1 } 100%{ transform: translateY(-400px) scale(1.4); opacity:0 } }`}</style>
@@ -168,7 +180,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
       <div className="relative z-10 p-4"><div className="grid grid-cols-4 gap-4">{[1,2,3,4,5,6,7,8,9,10,11,12].map(renderSeat)}</div></div>
 
-      {/* أزرار تفاعل سريعة */}
       <div className="relative z-10 flex justify-center gap-2 -mt-1 mb-1">
         {["🔥","❤️","🎉","👏","🇸🇩"].map(e=> <button key={e} onClick={()=>sendReaction(e)} className="w-9 h-9 bg-white/10 rounded-full text-[18px] hover:bg-white/20 active:scale-125 transition">{e}</button>)}
       </div>
@@ -187,7 +198,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
         <button className="w-10 h-10 bg-white/10 rounded-full">🎙️</button>
       </div>
 
-      {/* مودال المزاد */}
       {showAuction && (
         <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-6" onClick={()=>setShowAuction(null)}>
           <div onClick={e=>e.stopPropagation()} className="bg-[#122025] rounded-[24px] p-6 w-full max-w-[320px] text-center border border-yellow-400/30">
