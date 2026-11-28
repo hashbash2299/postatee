@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState, useRef } from "react"
 import { db } from "@/lib/firebase"
-import { collection, doc, setDoc, deleteDoc, onSnapshot, addDoc, serverTimestamp, query, orderBy, updateDoc } from "firebase/firestore"
+import { collection, doc, setDoc, deleteDoc, onSnapshot, addDoc, serverTimestamp, updateDoc } from "firebase/firestore"
 
 const SUGGESTED_SONGS = [
   { title: "زنق - حلاوة", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
@@ -26,13 +26,23 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
 
   useEffect(()=>{
     if(!id) return
-    return onSnapshot(doc(db, `chatRooms/${id}/music/current`), snap=> setMusic(snap.exists() ? snap.data() : null))
+    // ✅ مع معالجة خطأ - لو فشل ما يوقع الصفحة
+    return onSnapshot(doc(db, `chatRooms/${id}/music/current`),
+      snap=> setMusic(snap.exists() ? snap.data() : null),
+      ()=> setMusic(null)
+    )
   },[id])
 
   useEffect(()=>{
     if(!id) return
-    const q = query(collection(db, `chatRooms/${id}/music/playlist`), orderBy("order","asc"))
-    return onSnapshot(q, snap=> setPlaylist(snap.docs.map(d=>({id:d.id, ...d.data()}))))
+    // ✅ بدون orderBy - الترتيب بنعملو في المتصفح، عشان ما يحتاج Index
+    return onSnapshot(collection(db, `chatRooms/${id}/music/playlist`),
+      snap=>{
+        const list = snap.docs.map(d=>({id:d.id, ...d.data() as any})).sort((a:any,b:any)=> (a.order ?? 0) - (b.order ?? 0))
+        setPlaylist(list)
+      },
+      ()=> setPlaylist([])
+    )
   },[id])
 
   useEffect(()=>{
@@ -47,16 +57,19 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
 
   const addToPlaylist = async (url:string, title:string, autoPlay=false) => {
     if(!isRoomOwner || !url) return alert("حط رابط")
+    if(!user?.uid) return alert("انتظر ثانية... لسه بتحمل")
     const ytId = getYoutubeId(url)
     const type = ytId ? "youtube" : "mp3"
     const finalUrl = ytId ? `https://www.youtube.com/embed/${ytId}?autoplay=1` : url
-    const ref = await addDoc(collection(db, `chatRooms/${id}/music/playlist`), { url: finalUrl, rawUrl: url, ytId, type, title: title || "أغنية", order: playlist.length + 1, addedBy: user.uid, addedAt: serverTimestamp() })
-    setMusicUrl(""); setMusicTitle("")
-    if(autoPlay || playlist.length === 0) await playFromPlaylist({id: ref.id, url: finalUrl, rawUrl: url, ytId, type, title: title || "أغنية"}, playlist.length)
+    try{
+      const ref = await addDoc(collection(db, `chatRooms/${id}/music/playlist`), { url: finalUrl, rawUrl: url, ytId, type, title: title || "أغنية", order: playlist.length + 1, addedBy: user.uid, addedAt: serverTimestamp() })
+      setMusicUrl(""); setMusicTitle("")
+      if(autoPlay || playlist.length === 0) await playFromPlaylist({id: ref.id, url: finalUrl, rawUrl: url, ytId, type, title: title || "أغنية"}, playlist.length)
+    }catch(e:any){ alert("مشكلة في الصلاحيات: " + e.message) }
   }
 
   const playFromPlaylist = async (song:any, index:number) => {
-    if(!isRoomOwner) return
+    if(!isRoomOwner || !user?.uid) return
     await setDoc(doc(db, `chatRooms/${id}/music/current`), { url: song.url, rawUrl: song.rawUrl, ytId: song.ytId || null, type: song.type, title: song.title, isPlaying: true, currentId: song.id, currentIndex: index, playedBy: user.uid, playedByName: user.displayName, startedAt: serverTimestamp() })
   }
 
@@ -101,7 +114,6 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
 
   return (
     <>
-      {/* ✅ زر الموسيقى - لو مافي أغنية شغالة وانت المالك */}
       {!music && isRoomOwner && (
         <div className="relative z-10 mx-3 mb-2 shrink-0">
           <button onClick={()=>setShowPanel(true)} className="w-full bg-violet-500/15 border border-violet-500/30 rounded-[16px] p-2.5 flex items-center justify-center gap-2 text-[13px] font-black text-violet-300">
@@ -109,8 +121,6 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
           </button>
         </div>
       )}
-
-      {/* ✅ الشريط - يظهر للكل لما تشتغل أغنية */}
       {music && (
         <div className="relative z-10 mx-3 mb-2 shrink-0">
           <div className="bg-gradient-to-r from-violet-900/80 to-[#122025] border border-violet-500/30 rounded-[16px] overflow-hidden">
@@ -136,8 +146,6 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
           </div>
         </div>
       )}
-
-      {/* ✅ لوحة القائمة */}
       {showPanel && (
         <div className="fixed inset-0 bg-black/70 z-[150] flex items-end justify-center p-4" onClick={()=>setShowPanel(false)}>
           <div onClick={e=>e.stopPropagation()} className="bg-[#122025] rounded-[24px] p-5 w-full max-w-[420px] border border-white/10 max-h-[85vh] overflow-auto">
@@ -145,7 +153,6 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
               <h3 className="font-black text-[16px]">🎵 قائمة التشغيل {playlist.length>0 && `(${playlist.length})`}</h3>
               <button onClick={()=>setShowPanel(false)} className="w-8 h-8 bg-white/10 rounded-full">✕</button>
             </div>
-
             {isRoomOwner && (
               <>
                 <div className="flex gap-2 mb-4">
@@ -158,7 +165,6 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
                   <button onClick={()=>setIsShuffle(!isShuffle)} className={`flex-1 py-2.5 rounded-full font-black text-[12px] ${isShuffle ? "bg-violet-500" : "bg-white/10"}`}>🔀 عشوائي {isShuffle?"مفعل":"متوقف"}</button>
                   <button onClick={clearPlaylist} className="flex-1 py-2.5 rounded-full font-black text-[12px] bg-red-500/20 text-red-400">🗑️ مسح الكل</button>
                 </div>
-
                 <div className="space-y-2 bg-white/5 rounded-2xl p-3 mb-4">
                   <p className="text-[12px] font-black">+ أضف أغنية للقائمة</p>
                   <input value={musicUrl} onChange={e=>setMusicUrl(e.target.value)} placeholder="رابط يوتيوب أو MP3" className="w-full bg-white/10 rounded-xl px-4 py-3 text-[13px] outline-none" />
@@ -168,7 +174,6 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
                     <button onClick={()=>addToPlaylist(musicUrl, musicTitle, true)} className="flex-1 bg-[#00E676] text-black py-3 rounded-full font-black text-[13px]">▶️ أضف وشغّل</button>
                   </div>
                 </div>
-
                 <div className="mb-4">
                   <p className="text-[12px] font-black mb-2">🎧 مقترحة - دوس عشان تضيف</p>
                   <div className="flex gap-2 overflow-x-auto pb-1">
@@ -177,7 +182,6 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
                 </div>
               </>
             )}
-
             <div className="space-y-2">
               <p className="text-[12px] font-black text-white/60">📋 القائمة الحالية</p>
               {playlist.length===0 && <p className="text-center text-white/40 py-6 text-[13px]">القائمة فاضية<br/>{isRoomOwner ? "أضف أغاني فوق" : "المالك لسه ما أضاف أغاني"}</p>}
@@ -195,7 +199,6 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
           </div>
         </div>
       )}
-
       <audio ref={audioRef} onEnded={()=>{ if(isRoomOwner) playNext() }} className="hidden" />
     </>
   )

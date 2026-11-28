@@ -5,7 +5,8 @@ import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, addDoc, serverT
 import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
 import StoreBanner from "./StoreBanner"
-import MusicPlayer from "./MusicPlayer"
+import dynamic from "next/dynamic"
+const MusicPlayer = dynamic(() => import("./MusicPlayer"), { ssr: false })
 
 const isOwnerRole = (role: any) => role === "owner" || role === "مالك"
 
