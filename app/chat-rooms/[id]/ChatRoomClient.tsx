@@ -7,7 +7,6 @@ import Link from "next/link"
 import StoreBanner from "./StoreBanner"
 import dynamic from "next/dynamic"
 const MusicPlayer = dynamic(() => import("./MusicPlayer"), { ssr: false })
-
 const isOwnerRole = (role: any) => role === "owner" || role === "مالك"
 
 const SEAT_FRAMES = [
