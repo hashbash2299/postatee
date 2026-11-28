@@ -3,22 +3,33 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { db, auth } from "@/lib/firebase"
 import { doc, onSnapshot, collection, query, where } from "firebase/firestore"
+import { onAuthStateChanged } from "firebase/auth"
 
 export default function StoreBanner(){
   const [coins, setCoins] = useState(0)
   const [giftsCount, setGiftsCount] = useState(0)
   const [show, setShow] = useState(true)
+  const [user, setUser] = useState<any>(null)
+
+  useEffect(()=>{ return onAuthStateChanged(auth, setUser) },[])
 
   useEffect(()=>{
-    const u = auth.currentUser
-    if(!u) return
-    const unsubUser = onSnapshot(doc(db,"users",u.uid), snap=>{
+    if(!user) return
+    // ✅ FIX 1: error callback عشان لو الـ Rules رفضت ما توقع الصفحة
+    const unsubUser = onSnapshot(doc(db,"users",user.uid), snap=>{
       if(snap.exists()) setCoins(snap.data().coins || 0)
-    })
-    const q = query(collection(db,"gifts"), where("toUid","==",u.uid), where("claimed","==",false))
-    const unsubGifts = onSnapshot(q, snap=> setGiftsCount(snap.size))
+    }, ()=>{})
+
+    // ✅ FIX 2: where واحد بس، عشان ما يحتاج Composite Index
+    // الفلترة بتاعة claimed بنعملها في الجهاز، ما في السيرفر
+    const q = query(collection(db,"gifts"), where("toUid","==",user.uid))
+    const unsubGifts = onSnapshot(q, snap=>{
+      const unclaimed = snap.docs.filter(d => d.data().claimed !== true)
+      setGiftsCount(unclaimed.length)
+    }, ()=>{ setGiftsCount(0) })
+
     return ()=>{ unsubUser(); unsubGifts() }
-  },[])
+  },[user])
 
   if(!show) return null
 
