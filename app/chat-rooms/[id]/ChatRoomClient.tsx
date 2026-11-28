@@ -4,6 +4,7 @@ import { db, auth } from "@/lib/firebase"
 import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, addDoc, serverTimestamp, query, orderBy, updateDoc, increment } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
+import StoreBanner from "./StoreBanner"
 
 // ✅ دالة واحدة للأونر - بتقبل "owner" و "مالك"
 const isOwnerRole = (role: any) => role === "owner" || role === "مالك"
@@ -227,14 +228,14 @@ export default function ChatRoomClient({ id }: { id: string }) {
         <style>{`@keyframes flyUp { 0%{ transform: translateY(0) scale(0.5); opacity:0 } 20%{ opacity:1 } 100%{ transform: translateY(-400px) scale(1.4); opacity:0 } }`}</style>
       </div>
 
-      {/* هيدر */}
+      {/* هيدر - ✅ الشنطة محذوفة */}
       <div className="relative z-10 bg-black/20 backdrop-blur p-3 flex items-center justify-between border-b border-white/5 shrink-0">
         <div className="flex items-center gap-2"><Link href="/chat-rooms" className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">✕</Link><button className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">↗️</button></div>
         <div className="flex items-center gap-2 flex-1 justify-center">
           <button onClick={()=>!isJoined&&setIsJoined(true)} className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${isJoined?"bg-white/20":"bg-[#00E676] text-black"}`}>+</button>
           <div className="text-center"><h2 className="font-black text-[14px] truncate max-w-[160px]">{room.decoratedName||room.name}</h2><p className="text-[10px] text-white/60">{joinedCount} الأعضاء • 🟢 {onlineCount} • 💰 {myCoins}</p></div>
         </div>
-        <div className="flex items-center gap-1.5"><div className="bg-white/10 px-2.5 py-1 rounded-full text-[11px]">🏆 الترتيب</div><div className="bg-yellow-500/20 px-2 py-1 rounded-full text-[11px]">👜</div></div>
+        <div className="flex items-center gap-1.5"><div className="bg-white/10 px-2.5 py-1 rounded-full text-[11px]">🏆 الترتيب</div></div>
       </div>
 
       {/* ✅ كراسي - صغيرة ومضغوطة */}
@@ -257,6 +258,9 @@ export default function ChatRoomClient({ id }: { id: string }) {
           </div>
         </div>
       )}
+
+      {/* ✅ بطاقة المتجر - نفس ستايل بطاقة الشحن */}
+      <StoreBanner />
 
       {/* أزرار التفاعل - صغيرة */}
       <div className="relative z-10 flex justify-center gap-2 mb-1.5 shrink-0">
