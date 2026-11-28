@@ -24,6 +24,39 @@ const NAME_COLORS = [
   { id: "rainbow", label: "قوس قزح", class: "bg-gradient-to-r from-pink-500 via-yellow-400 to-cyan-400 bg-clip-text text-transparent font-black", price: 1000 },
 ]
 
+// ✅ إطارات الصورة - نفس المتجر
+const AVATAR_FRAMES = [
+  { id: "none", class: "border-transparent" },
+  { id: "gold_ring", class: "border-yellow-400 border-[3px] shadow-[0_0_12px_rgba(250,204,21,0.6)]" },
+  { id: "green_neon", class: "border-[#00E676] border-[3px] shadow-[0_0_15px_rgba(0,230,118,0.7)]" },
+  { id: "fire_ring", class: "border-orange-500 border-[3px] shadow-[0_0_15px_rgba(249,115,22,0.8)]" },
+  { id: "rainbow_ring", class: "border-transparent ring-[3px] ring-pink-500" },
+  { id: "diamond_ring", class: "border-white border-[3px] shadow-[0_0_20px_rgba(255,255,255,0.9)]" },
+  { id: "king_frame", class: "border-yellow-300 border-[4px] shadow-[0_0_20px_rgba(250,204,21,0.9)]" },
+]
+
+// ✅ زخارف الاسم - للعرض في الكرسي والرسائل
+const NAME_DECORATIONS = [
+  { id: "none", prefix: "", suffix: "" },
+  { id: "crown", prefix: "👑 ", suffix: " 👑" },
+  { id: "fire", prefix: "🔥 ", suffix: " 🔥" },
+  { id: "heart", prefix: "❤️ ", suffix: " ❤️" },
+  { id: "star", prefix: "⭐ ", suffix: " ⭐" },
+  { id: "brackets", prefix: "〖", suffix: "〗" },
+  { id: "angel", prefix: "😇 ", suffix: " 😇" },
+  { id: "king", prefix: "♔ ", suffix: " ♔" },
+]
+
+// ✅ دخول مميز - الأسعار من المتجر
+const ENTRANCES: any = {
+  none: null,
+  fire_entry: { label: "دخول ناري 🔥", icon: "🔥", emojis: ["🔥","🔥","🧨","🔥","💥","🔥"], bg: "from-orange-500/40 via-red-500/20 to-transparent", text: "دخل الغرفة... الشاشة ولعت 🔥" },
+  hearts: { label: "قلوب متطايرة ❤️", icon: "💕", emojis: ["❤️","💕","💖","❤️","💗","💕"], bg: "from-pink-500/40 via-rose-500/20 to-transparent", text: "دخل بالحب... قلوب في كل حتة ❤️" },
+  gold_rain: { label: "مطر ذهب 💰", icon: "💸", emojis: ["💰","🪙","💸","💰","⭐","🪙"], bg: "from-yellow-500/40 via-amber-500/20 to-transparent", text: "دخل بالذهب... الكوينز نازلة 💰" },
+  king_entry: { label: "دخول الملوك 👑", icon: "👑", emojis: ["👑","⭐","💎","👑","✨","👑"], bg: "from-yellow-400/40 via-amber-500/20 to-transparent", text: "ملك دخل الغرفة... قومو على حيلكم 👑" },
+  legend: { label: "دخول أسطوري ⚡", icon: "⚡", emojis: ["⚡","🔥","💎","👑","🌟","⚡"], bg: "from-violet-500/40 via-yellow-400/20 to-transparent", text: "أسطورة دخلت... الكل يسكت ⚡" },
+}
+
 const TOTAL_SEATS = 12
 const EMOJIS = ["❤️","😂","😍","🔥","👏","🇸🇩","💚","😭"]
 const AUCTION_SEATS: Record<number, number> = { 2: 500, 3: 300 }
@@ -43,6 +76,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
   const [flying, setFlying] = useState<{id:number, emoji:string, left:number}[]>([])
   const [showAuction, setShowAuction] = useState<number | null>(null)
   const [legendEntry, setLegendEntry] = useState<any>(null)
+  const [entranceEntry, setEntranceEntry] = useState<any>(null)
   const [showAd, setShowAd] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -62,7 +96,8 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
   useEffect(()=>{
     if(!user) return
-    getDoc(doc(db,"users",user.uid)).then(s=>{ if(s.exists()){ setMyCoins(s.data().coins ?? 1000); setUserProfile(s.data()) } })
+    const unsub = onSnapshot(doc(db,"users",user.uid), s=>{ if(s.exists()){ setMyCoins(s.data().coins ?? 1000); setUserProfile(s.data()) } })
+    return ()=> unsub()
   },[user])
 
   useEffect(()=>{
@@ -72,12 +107,13 @@ export default function ChatRoomClient({ id }: { id: string }) {
     })
   },[id])
 
-  // ===== دخول الهيبة - owner بس 🔥 =====
+  // ===== دخول الهيبة + الدخول المميز 🔥 =====
   useEffect(()=>{
     if(!id || !user) return
     const isLegend = isOwnerRole(userProfile?.role)
+    const myEntrance = userProfile?.entrance || "none"
     const myRef = doc(db, `chatRooms/${id}/online/${user.uid}`)
-    setDoc(myRef, { uid:user.uid, joinedAt:serverTimestamp(), name:user.displayName, photo:user.photoURL || userProfile?.avatar || "", role: userProfile?.role || "member", isLegend }, { merge:true })
+    setDoc(myRef, { uid:user.uid, joinedAt:serverTimestamp(), name:user.displayName, photo:user.photoURL || userProfile?.avatar || "", role: userProfile?.role || "member", isLegend, entrance: myEntrance }, { merge:true })
     const unsub = onSnapshot(collection(db, `chatRooms/${id}/online`), s=>{
       setOnlineCount(s.size); setJoinedCount(s.size)
       s.docChanges().forEach(change=>{
@@ -86,6 +122,9 @@ export default function ChatRoomClient({ id }: { id: string }) {
           if(d.isLegend){
             setLegendEntry(d)
             setTimeout(()=> setLegendEntry(null), 4500)
+          } else if(d.entrance && d.entrance !== "none" && ENTRANCES[d.entrance]){
+            setEntranceEntry({...d, entranceData: ENTRANCES[d.entrance]})
+            setTimeout(()=> setEntranceEntry(null), 3500)
           }
         }
       })
@@ -93,10 +132,13 @@ export default function ChatRoomClient({ id }: { id: string }) {
     if(isLegend){
       setLegendEntry({ name: user.displayName, role: userProfile?.role, photo: user.photoURL })
       setTimeout(()=> setLegendEntry(null), 4500)
+    } else if(myEntrance !== "none" && ENTRANCES[myEntrance]){
+      setEntranceEntry({ name: user.displayName, photo: user.photoURL, entranceData: ENTRANCES[myEntrance] })
+      setTimeout(()=> setEntranceEntry(null), 3500)
     }
     setIsJoined(true)
     return ()=>{ deleteDoc(myRef).catch(()=>{}); unsub() }
-  },[id,user,userProfile?.role])
+  },[id,user,userProfile?.role,userProfile?.entrance])
 
   useEffect(()=>{
     if(!id) return
@@ -141,7 +183,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     }
     const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
     if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
-    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", frame: userProfile?.seatFrame || "none", nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
+    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", frame: userProfile?.seatFrame || "none", avatarFrame: userProfile?.avatarFrame || "none", nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", decoId: userProfile?.decoId || "none", entrance: userProfile?.entrance || "none", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
   }
 
   const buyAuctionSeat = async (num:number) => {
@@ -152,7 +194,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     if(room?.ownerUid) await updateDoc(doc(db,"users",room.ownerUid), { coins: increment(price) }).catch(()=>{})
     const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
     if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
-    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", isAuction:true, price, frame: userProfile?.seatFrame || "gold", nameColor: userProfile?.nameColor || "gold", decoPrefix: userProfile?.decoPrefix || "", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
+    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", isAuction:true, price, frame: userProfile?.seatFrame || "gold", avatarFrame: userProfile?.avatarFrame || "none", nameColor: userProfile?.nameColor || "gold", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", decoId: userProfile?.decoId || "none", entrance: userProfile?.entrance || "none", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
     await addDoc(collection(db, `chatRooms/${id}/messages`), { text:`💰 ${user.displayName} اشترى مقعد ${num} بـ ${price} كوينز`, isSystem:true, createdAt:serverTimestamp() })
     setShowAuction(null)
   }
@@ -165,11 +207,15 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
   const sendMessage = async () => {
     if(!text.trim()||!user) return
-    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:text.trim(), uid:user.uid, displayName:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL, nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", role: userProfile?.role || "member", createdAt:serverTimestamp() })
+    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:text.trim(), uid:user.uid, displayName:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL, nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", role: userProfile?.role || "member", createdAt:serverTimestamp() })
     setText("")
   }
 
   const isOwner = room?.ownerUid===user?.uid
+
+  const getAvatarClass = (avatarFrameId:string) => {
+    return AVATAR_FRAMES.find(f=>f.id===avatarFrameId)?.class || "border-transparent"
+  }
 
   // ✅ كراسي صغيرة - كانت 62px بقت 48px عشان نفضي مساحة للونسة
   const renderSeat = (num:number) => {
@@ -183,8 +229,15 @@ export default function ChatRoomClient({ id }: { id: string }) {
         {num===1 && <span className="absolute -top-1 -right-1 z-10 text-[8px] bg-yellow-400 text-black rounded-full w-4 h-4 flex items-center justify-center font-black">👑</span>}
         {s.isAuction && <span className="absolute -top-1.5 left-0 z-10 bg-yellow-500 text-black text-[6px] font-black px-1 rounded-full">💰</span>}
         {isLegendSeat && <span className="absolute -top-1 -left-1 z-10 text-[10px]">✨</span>}
-        <div className={`w-[50px] h-[50px] rounded-full p-[2px] ${frame.class} ${isMe ? "ring-2 ring-[#00E676]" : ""} ${isLegendSeat ? "ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.7)]" : ""}`}><img src={s.photo||`https://i.pravatar.cc/100?u=${s.occupiedBy}`} className="w-full h-full rounded-full object-cover bg-[#1A2E35] border border-[#0B1416]" /></div>
-        <span className={`text-[9px] font-bold truncate max-w-[56px] ${nameColor.class}`}>{s.decoPrefix || ""} {s.name?.slice(0,5)} {num===1?"👑":""}</span>
+        {s.entrance && s.entrance !== "none" && <span className="absolute -top-1.5 -left-1 z-10 text-[10px]">{ENTRANCES[s.entrance]?.icon || "⚡"}</span>}
+        {/* ✅ إطار الصورة + إطار المقعد مع بعض */}
+        <div className={`w-[50px] h-[50px] rounded-full p-[2px] ${frame.class} ${isMe ? "ring-2 ring-[#00E676]" : ""} ${isLegendSeat ? "ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.7)]" : ""}`}>
+          <div className={`w-full h-full rounded-full overflow-hidden border ${getAvatarClass(s.avatarFrame || "none")}`}>
+            <img src={s.photo||`https://i.pravatar.cc/100?u=${s.occupiedBy}`} className="w-full h-full rounded-full object-cover bg-[#1A2E35]" />
+          </div>
+        </div>
+        {/* ✅ زخرفة الاسم + لون الاسم */}
+        <span className={`text-[9px] font-bold truncate max-w-[56px] ${nameColor.class}`}>{s.decoPrefix || ""}{s.name?.slice(0,5)}{s.decoSuffix || ""}{num===1?"👑":""}</span>
         {s.level && <span className="text-[7px] bg-white/10 px-1 py-0 rounded-full font-black">Lv.{s.level} {isOwnerRole(s.role) ? "👑" : ""}</span>}
       </div>
     )
@@ -203,7 +256,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     <div className="h-[100dvh] flex flex-col text-white relative overflow-hidden">
       <div className="absolute inset-0"><div className="absolute inset-0 bg-gradient-to-b from-[#0F2A2E] via-[#122025] to-[#0B1416]" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#00E676]/10 rounded-full blur-[80px]" /><div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-orange-500/10 rounded-full blur-[90px]" /></div>
 
-      {/* ===== دخول الهيبة ===== */}
+      {/* ===== دخول الهيبة - المالك ===== */}
       {legendEntry && (
         <div className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
           <div className="absolute inset-0 bg-gradient-to-br from-[#00E676]/30 via-yellow-400/20 to-transparent animate-pulse" />
@@ -218,6 +271,25 @@ export default function ChatRoomClient({ id }: { id: string }) {
             <h1 className="text-[28px] font-black bg-gradient-to-r from-yellow-300 via-green-400 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(0,230,118,0.8)]">{legendEntry.name}</h1>
             <p className="text-[18px] font-black text-white mt-1 drop-shadow">ملك المنصة دخل الغرفة... الشاشة ولعت 🔥</p>
             <p className="text-[13px] text-white/80 mt-2">🇸🇩 هيبة وحضور • مالك الموقع</p>
+          </div>
+          <style>{`@keyframes scaleUp{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}`}</style>
+        </div>
+      )}
+
+      {/* ===== دخول مميز - مشترى بالكوينز ⚡ ===== */}
+      {entranceEntry && !legendEntry && (
+        <div className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
+          <div className={`absolute inset-0 bg-gradient-to-br ${entranceEntry.entranceData.bg} animate-pulse`} />
+          <div className="absolute inset-0 overflow-hidden">
+            {entranceEntry.entranceData.emojis.map((e:string,i:number)=>(
+              <div key={i} className="absolute text-[26px] animate-[flyUp_3s_ease-out_forwards]" style={{ left: `${(i*47)%100}%`, top: `${60 + (i%3)*15}%` }}>{e}</div>
+            ))}
+          </div>
+          <div className="relative text-center animate-[scaleUp_0.5s_ease-out]">
+            <div className="text-[70px] animate-bounce">{entranceEntry.entranceData.icon}</div>
+            <h1 className="text-[26px] font-black text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">{entranceEntry.name}</h1>
+            <p className="text-[16px] font-black text-white mt-1 drop-shadow">{entranceEntry.entranceData.text}</p>
+            <p className="text-[12px] text-white/80 mt-2">✨ {entranceEntry.entranceData.label}</p>
           </div>
           <style>{`@keyframes scaleUp{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}`}</style>
         </div>
@@ -278,7 +350,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
           </div>
         )}
         {messages.slice(-50).map(m=> m.isSystem ? <div key={m.id} className="flex items-center gap-2 text-[12px] text-white/60 bg-white/5 w-fit px-3 py-1.5 rounded-full"><span>👋</span><p>{m.text}</p></div> : (
-          <div key={m.id} className="flex gap-2"><img src={m.photo||`https://i.pravatar.cc/100?u=${m.uid}`} className="w-7 h-7 rounded-full shrink-0" /><div className="bg-white/10 rounded-2xl px-3 py-1.5 max-w-[80%]"><span className={`text-[11px] font-black ${isOwnerRole(m.role) ? "text-yellow-400" : "text-[#00E676]"}`}>{m.decoPrefix || ""} {m.displayName}{isOwnerRole(m.role) ? " 👑" : ""}:</span><span className="text-[13px] ml-1 break-words">{m.text}</span></div></div>
+          <div key={m.id} className="flex gap-2"><img src={m.photo||`https://i.pravatar.cc/100?u=${m.uid}`} className="w-7 h-7 rounded-full shrink-0" /><div className="bg-white/10 rounded-2xl px-3 py-1.5 max-w-[80%]"><span className={`text-[11px] font-black ${isOwnerRole(m.role) ? "text-yellow-400" : "text-[#00E676]"}`}>{m.decoPrefix || ""}{m.displayName}{m.decoSuffix || ""}{isOwnerRole(m.role) ? " 👑" : ""}:</span><span className="text-[13px] ml-1 break-words">{m.text}</span></div></div>
         ))}
       </div>
 
