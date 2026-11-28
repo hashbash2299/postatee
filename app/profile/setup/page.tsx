@@ -1,10 +1,11 @@
 "use client"
 import { useState, useEffect } from "react";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { Camera, Check, Circle, Crown, Gem, Star, Verified } from "lucide-react";
+import { SEAT_FRAMES, NAME_COLORS, getLevelFromXP } from "@/lib/chatRoomsData";
 
 // ✅ التغيير الوحيد - واحدة ديفولت فقط فلكلور سوداني + محايد
 const DEFAULT_AVATAR = "/default-avatar.png";
@@ -12,15 +13,19 @@ const DEFAULT_COVER = "/default-cover.jpg";
 const defaultAvatars = [DEFAULT_AVATAR];
 const defaultCovers = [DEFAULT_COVER];
 
+// ✅ جديد: الأونر = "مالك" أو "owner" - عشان يتوافق مع نظامك القديم + الغرفة
+const isOwnerRole = (role: string) => role === "مالك" || role === "owner";
+
 const getNameColor = (role:string) => {
   if(role === "مؤسس") return "text-cyan-400";
   if(role === "شخصية هامة") return "text-red-400";
   if(role === "شارة خضراء") return "text-green-400";
   if(role === "مالك") return "text-cyan-300";
+  if(role === "owner") return "text-yellow-300";
   return "text-white";
 };
 const RoleBadge = ({ role }: { role: string }) => {
-  if (role === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
+  if (role === "مالك" || role === "owner") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-cyan-400 to-teal-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full"><Crown className="w-3 h-3"/> مالك</span>;
   if (role === "مؤسس") return <span className="inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/50 text-cyan-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><Gem className="w-3 h-3"/> مؤسس</span>;
   if (role === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full"><Star className="w-3 h-3 fill-red-400"/> هامة</span>;
   if (role === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full"><Verified className="w-3 h-3"/> موثق</span>;
@@ -41,6 +46,13 @@ export default function SetupProfile() {
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
+  // ✅ جديد: المتجر
+  const [storeTab, setStoreTab] = useState<"frames" | "colors">("frames");
+  const [seatFrame, setSeatFrame] = useState("none");
+  const [nameColor, setNameColor] = useState("white");
+  const [ownedFrames, setOwnedFrames] = useState<string[]>(["none"]);
+  const [ownedColors, setOwnedColors] = useState<string[]>(["white"]);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { router.replace('/login'); return; }
@@ -59,11 +71,53 @@ export default function SetupProfile() {
         if(data.username) setUsername(data.username);
         if(data.avatar) setAvatar(data.avatar);
         if(data.cover) setCover(data.cover);
+        // ✅ تحميل المتجر
+        if(data.seatFrame) setSeatFrame(data.seatFrame);
+        if(data.nameColor) setNameColor(data.nameColor);
+        if(data.ownedFrames) setOwnedFrames(data.ownedFrames);
+        if(data.ownedColors) setOwnedColors(data.ownedColors);
       }
       setLoading(false);
     });
     return () => unsub();
   }, [router]);
+
+  const coins = existingData?.coins ?? 1000;
+  const xp = existingData?.xp ?? 0;
+  const levelInfo = getLevelFromXP(xp);
+  const owner = isOwnerRole(existingData?.role || "");
+
+  const buyFrame = async (frame: any) => {
+    if (owner) {
+      setSeatFrame(frame.id);
+      await updateDoc(doc(db, 'users', uid), { seatFrame: frame.id }).catch(()=>{});
+      return;
+    }
+    if (ownedFrames.includes(frame.id)) { setSeatFrame(frame.id); await updateDoc(doc(db, 'users', uid), { seatFrame: frame.id }).catch(()=>{}); return; }
+    if (coins < frame.price) return alert(`كوينزك ${coins} ما كافية! تحتاج ${frame.price}`);
+    if (levelInfo.level < (frame.minLevel || 0)) return alert(`تحتاج مستوى ${frame.minLevel} - مستواك ${levelInfo.level}`);
+    const newOwned = [...ownedFrames, frame.id];
+    setOwnedFrames(newOwned); setSeatFrame(frame.id);
+    setExistingData((p:any)=>({...p, coins: p.coins - frame.price, ownedFrames: newOwned, seatFrame: frame.id}));
+    await updateDoc(doc(db, 'users', uid), { coins: increment(-frame.price), ownedFrames: newOwned, seatFrame: frame.id }).catch(()=>{});
+    alert(`مبروك! اشتريت ${frame.label} 🎉`);
+  };
+
+  const buyColor = async (color: any) => {
+    if (owner) {
+      setNameColor(color.id);
+      await updateDoc(doc(db, 'users', uid), { nameColor: color.id }).catch(()=>{});
+      return;
+    }
+    if (ownedColors.includes(color.id)) { setNameColor(color.id); await updateDoc(doc(db, 'users', uid), { nameColor: color.id }).catch(()=>{}); return; }
+    if (coins < color.price) return alert(`كوينزك ${coins} ما كافية! تحتاج ${color.price}`);
+    if (levelInfo.level < (color.minLevel || 0)) return alert(`تحتاج مستوى ${color.minLevel}`);
+    const newOwned = [...ownedColors, color.id];
+    setOwnedColors(newOwned); setNameColor(color.id);
+    setExistingData((p:any)=>({...p, coins: p.coins - color.price, ownedColors: newOwned, nameColor: color.id}));
+    await updateDoc(doc(db, 'users', uid), { coins: increment(-color.price), ownedColors: newOwned, nameColor: color.id }).catch(()=>{});
+    alert(`مبروك! اشتريت لون ${color.label} 🎉`);
+  };
 
   const handleSave = async () => {
     const cleanUsername = username.toLowerCase().trim().replace('@','').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
@@ -106,6 +160,13 @@ export default function SetupProfile() {
         profileCompleted: true,
         updatedAt: serverTimestamp(),
         createdAt: existingData?.createdAt || serverTimestamp(),
+        // ✅ حفظ المتجر مع البروفايل - ما بيمسح الرول ولا الكوينز
+        seatFrame,
+        nameColor,
+        ownedFrames,
+        ownedColors,
+        coins: existingData?.coins ?? 1000,
+        xp: existingData?.xp ?? 0,
       }, { merge: true });
 
       router.replace('/');
@@ -125,6 +186,9 @@ export default function SetupProfile() {
     );
   }
 
+  const previewFrame = SEAT_FRAMES.find(f => f.id === seatFrame) || SEAT_FRAMES[0];
+  const previewColorObj = NAME_COLORS.find(c => c.id === nameColor) || NAME_COLORS[0];
+
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap'); *{font-family:'Tajawal',sans-serif!important;}`}</style>
@@ -135,15 +199,18 @@ export default function SetupProfile() {
             <div className="absolute inset-0 bg-black/30"/>
             <div className="absolute bottom-4 left-4 right-4 flex items-end gap-4">
               <div className="relative">
-                <img src={avatar || DEFAULT_AVATAR} className="w-24 h-24 rounded-full border-4 border-[#050a0a] object-cover" alt="avatar"/>
+                <div className={`w-24 h-24 rounded-full p-[3px] ${owner ? "bg-gradient-to-br from-yellow-300 via-amber-500 to-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.8)]" : previewFrame.class}`}>
+                  <img src={avatar || DEFAULT_AVATAR} className="w-full h-full rounded-full border-4 border-[#050a0a] object-cover" alt="avatar"/>
+                </div>
                 <span className={`absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-black ${isOnline? 'bg-green-400' : 'bg-gray-500'}`}></span>
               </div>
               <div className="pb-2">
                 <div className="flex items-center gap-2">
-                  <h2 className={`font-black text-xl ${getNameColor(existingData?.role || '')}`}>{displayName || "اسمك"}</h2>
+                  <h2 className={`font-black text-xl ${owner ? "text-yellow-300" : previewColorObj.class} ${getNameColor(existingData?.role || '')}`}>{displayName || "اسمك"}</h2>
                   {existingData?.role && <RoleBadge role={existingData.role}/>}
                 </div>
                 <p className="text-white/60 text-sm">@{username || "username"} • {isOnline? "متصل الآن" : "غير متصل"}</p>
+                <p className="text-[11px] text-yellow-300/80 font-bold mt-0.5">💰 {coins} كوينز • Lv.{levelInfo.level} {levelInfo.title}</p>
               </div>
             </div>
           </div>
@@ -166,6 +233,58 @@ export default function SetupProfile() {
             <div><label className="text-sm text-white/60 mb-2">الخلفية الافتراضية - فلكلور سوداني</label>
               <div className="grid grid-cols-3 gap-3">{defaultCovers.map((c,i)=><img key={i} src={c} onClick={()=>setCover(c)} className={`w-full h-20 rounded-xl object-cover cursor-pointer border-2 ${cover===c?'border-cyan-400':'border-transparent'}`} alt="cover"/>)}</div>
               <p className="text-[11px] text-white/30 mt-2">تصميم فلكلور سوداني أصيل - تقدر تغيره من البروفايل</p>
+            </div>
+
+            {/* ✅ جديد: المتجر - إطارات + ألوان */}
+            <div className="border-t border-white/10 pt-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-black text-[15px]">🛍️ متجر الزخرفة</h3>
+                <span className="bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full text-[12px] font-black">💰 {coins}</span>
+              </div>
+              {owner && <p className="bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-[12px] font-bold rounded-xl p-2.5 mb-3 text-center">👑 انت المالك - كل حاجة مجانية ليك!</p>}
+              <div className="flex gap-2 mb-4">
+                <button onClick={()=>setStoreTab("frames")} className={`flex-1 py-2 rounded-full font-black text-[13px] ${storeTab==="frames" ? "bg-cyan-400 text-black" : "bg-white/10"}`}>🪑 إطارات المقعد</button>
+                <button onClick={()=>setStoreTab("colors")} className={`flex-1 py-2 rounded-full font-black text-[13px] ${storeTab==="colors" ? "bg-cyan-400 text-black" : "bg-white/10"}`}>🎨 ألوان الاسم</button>
+              </div>
+
+              {storeTab==="frames" && (
+                <div className="grid grid-cols-2 gap-3">
+                  {SEAT_FRAMES.filter(f=> !(f as any).ownerOnly || owner).map(f=>{
+                    const owned = ownedFrames.includes(f.id) || owner;
+                    const selected = seatFrame===f.id;
+                    const locked = !owner && levelInfo.level < (f.minLevel||0);
+                    return (
+                      <div key={f.id} className={`bg-white/5 border rounded-2xl p-3 text-center ${selected ? "border-cyan-400" : "border-white/10"}`}>
+                        <div className={`w-14 h-14 rounded-full p-[2px] mx-auto ${f.class}`}><img src={avatar} className="w-full h-full rounded-full object-cover" /></div>
+                        <p className="font-bold text-[13px] mt-2">{f.label}</p>
+                        <p className="text-[11px] text-white/40">مستوى {f.minLevel}+</p>
+                        <button disabled={locked} onClick={()=>buyFrame(f)} className={`w-full mt-2 py-2 rounded-full font-black text-[12px] ${selected ? "bg-cyan-400 text-black" : locked ? "bg-white/10 text-white/40" : owned ? "bg-white/15" : "bg-yellow-500 text-black"}`}>
+                          {selected ? "✅ مختار" : locked ? `🔒 مستوى ${f.minLevel}` : owned ? "اختيار" : owner ? "مجاني 👑" : `اشتري - ${f.price} 💰`}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {storeTab==="colors" && (
+                <div className="grid grid-cols-2 gap-3">
+                  {NAME_COLORS.filter(c=> !(c as any).ownerOnly || owner).map(c=>{
+                    const owned = ownedColors.includes(c.id) || owner;
+                    const selected = nameColor===c.id;
+                    const locked = !owner && levelInfo.level < (c.minLevel||0);
+                    return (
+                      <div key={c.id} className={`bg-white/5 border rounded-2xl p-3 text-center ${selected ? "border-cyan-400" : "border-white/10"}`}>
+                        <p className={`font-black text-[16px] ${c.class}`}>{displayName || "اسمك"}</p>
+                        <p className="text-[11px] text-white/40 mt-1">{c.label} • مستوى {c.minLevel}+</p>
+                        <button disabled={locked} onClick={()=>buyColor(c)} className={`w-full mt-2 py-2 rounded-full font-black text-[12px] ${selected ? "bg-cyan-400 text-black" : locked ? "bg-white/10 text-white/40" : owned ? "bg-white/15" : "bg-yellow-500 text-black"}`}>
+                          {selected ? "✅ مختار" : locked ? `🔒 مستوى ${c.minLevel}` : owned ? "اختيار" : owner ? "مجاني 👑" : `اشتري - ${c.price} 💰`}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              <p className="text-[11px] text-white/30 mt-3 text-center">بعد الحفظ، إطارك ولون اسمك حيظهروا طوالي في المقعد والرسائل</p>
             </div>
 
             <div className="flex items-center justify-between bg-white/5 p-4 rounded-full border border-white/10">

@@ -5,6 +5,9 @@ import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, addDoc, serverT
 import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
 
+// ✅ دالة واحدة للأونر - بتقبل "owner" و "مالك" عشان تتوافق مع ملف البروفايل حقك
+const isOwnerRole = (role: any) => role === "owner" || role === "مالك"
+
 // ===== زخرفة المقاعد والأسماء =====
 const SEAT_FRAMES = [
   { id: "none", label: "عادي", class: "bg-white/20", price: 0 },
@@ -71,9 +74,9 @@ export default function ChatRoomClient({ id }: { id: string }) {
   // ===== دخول الهيبة - owner بس 🔥 =====
   useEffect(()=>{
     if(!id || !user) return
-    const isLegend = userProfile?.role === "owner"
+    const isLegend = isOwnerRole(userProfile?.role)
     const myRef = doc(db, `chatRooms/${id}/online/${user.uid}`)
-    setDoc(myRef, { uid:user.uid, joinedAt:serverTimestamp(), name:user.displayName, photo:user.photoURL, role: userProfile?.role || "member", isLegend }, { merge:true })
+    setDoc(myRef, { uid:user.uid, joinedAt:serverTimestamp(), name:user.displayName, photo:user.photoURL || userProfile?.avatar || "", role: userProfile?.role || "member", isLegend }, { merge:true })
     const unsub = onSnapshot(collection(db, `chatRooms/${id}/online`), s=>{
       setOnlineCount(s.size); setJoinedCount(s.size)
       s.docChanges().forEach(change=>{
@@ -87,7 +90,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
       })
     })
     if(isLegend){
-      setLegendEntry({ name: user.displayName, role: "owner", photo: user.photoURL })
+      setLegendEntry({ name: user.displayName, role: userProfile?.role, photo: user.photoURL })
       setTimeout(()=> setLegendEntry(null), 4500)
     }
     setIsJoined(true)
@@ -137,7 +140,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     }
     const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
     if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
-    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:user.photoURL||"", frame: userProfile?.seatFrame || "none", nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
+    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", frame: userProfile?.seatFrame || "none", nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
   }
 
   const buyAuctionSeat = async (num:number) => {
@@ -148,7 +151,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     if(room?.ownerUid) await updateDoc(doc(db,"users",room.ownerUid), { coins: increment(price) }).catch(()=>{})
     const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
     if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
-    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:user.photoURL||"", isAuction:true, price, frame: userProfile?.seatFrame || "gold", nameColor: userProfile?.nameColor || "gold", decoPrefix: userProfile?.decoPrefix || "", level: userProfile?.level || 1, joinedAt:serverTimestamp() })
+    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", isAuction:true, price, frame: userProfile?.seatFrame || "gold", nameColor: userProfile?.nameColor || "gold", decoPrefix: userProfile?.decoPrefix || "", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
     await addDoc(collection(db, `chatRooms/${id}/messages`), { text:`💰 ${user.displayName} اشترى مقعد ${num} بـ ${price} كوينز`, isSystem:true, createdAt:serverTimestamp() })
     setShowAuction(null)
   }
@@ -161,7 +164,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
   const sendMessage = async () => {
     if(!text.trim()||!user) return
-    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:text.trim(), uid:user.uid, displayName:user.displayName||"سوداني", photo:user.photoURL, nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", role: userProfile?.role || "member", createdAt:serverTimestamp() })
+    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:text.trim(), uid:user.uid, displayName:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL, nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", role: userProfile?.role || "member", createdAt:serverTimestamp() })
     setText("")
   }
 
@@ -170,7 +173,8 @@ export default function ChatRoomClient({ id }: { id: string }) {
     const s=seats[num]; const isMe=s?.occupiedBy===user?.uid; const isAuction = !!AUCTION_SEATS[num]
     const frame = SEAT_FRAMES.find(f=> f.id === s?.frame) || SEAT_FRAMES[0]
     const nameColor = NAME_COLORS.find(c=> c.id === s?.nameColor) || NAME_COLORS[0]
-    const isLegendSeat = s?.role === "owner"
+    // ✅ التعديل هنا - كان "owner" بس، هسه بيقبل "مالك" كمان
+    const isLegendSeat = isOwnerRole(s?.role)
     if(s?.locked) return <div key={num} className="flex flex-col items-center gap-1"><div className="w-[62px] h-[62px] rounded-full bg-white/10 flex items-center justify-center">🔒</div><span className="text-[12px] font-bold">{num}</span></div>
     if(s?.occupiedBy) return (
       <div key={num} onClick={()=> isMe||isOwner?leaveSeat(num):{}} className="flex flex-col items-center gap-1 relative cursor-pointer">
@@ -179,7 +183,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
         {isLegendSeat && <span className="absolute -top-2 -left-1 z-10 text-[12px] animate-pulse">✨</span>}
         <div className={`w-[68px] h-[68px] rounded-full p-[3px] ${frame.class} ${isMe ? "ring-2 ring-[#00E676]" : ""} ${isLegendSeat ? "ring-2 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.7)]" : ""}`}><img src={s.photo||`https://i.pravatar.cc/100?u=${s.occupiedBy}`} className="w-full h-full rounded-full object-cover bg-[#1A2E35] border-2 border-[#0B1416]" /></div>
         <span className={`text-[11px] font-bold truncate max-w-[70px] ${nameColor.class}`}>{s.decoPrefix || ""} {s.name?.slice(0,6)} {num===1?"👑":""}</span>
-        {s.level && <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded-full font-black">Lv.{s.level} {s.role==="owner" ? "👑" : ""}</span>}
+        {s.level && <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded-full font-black">Lv.{s.level} {isOwnerRole(s.role) ? "👑" : ""}</span>}
       </div>
     )
     return (
@@ -241,7 +245,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-auto p-3 space-y-2 mt-2">
         {messages.slice(-30).map(m=> m.isSystem ? <div key={m.id} className="flex items-center gap-2 text-[12px] text-white/60 bg-white/5 w-fit px-3 py-1.5 rounded-full"><span>👋</span><p>{m.text}</p></div> : (
-          <div key={m.id} className="flex gap-2"><img src={m.photo||`https://i.pravatar.cc/100?u=${m.uid}`} className="w-7 h-7 rounded-full" /><div className="bg-white/10 rounded-2xl px-3 py-1.5 max-w-[75%]"><span className={`text-[11px] font-black ${m.role==="owner" ? "text-yellow-400" : "text-[#00E676]"}`}>{m.decoPrefix || ""} {m.displayName}{m.role==="owner" ? " 👑" : ""}:</span><span className="text-[13px] ml-1">{m.text}</span></div></div>
+          <div key={m.id} className="flex gap-2"><img src={m.photo||`https://i.pravatar.cc/100?u=${m.uid}`} className="w-7 h-7 rounded-full" /><div className="bg-white/10 rounded-2xl px-3 py-1.5 max-w-[75%]"><span className={`text-[11px] font-black ${isOwnerRole(m.role) ? "text-yellow-400" : "text-[#00E676]"}`}>{m.decoPrefix || ""} {m.displayName}{isOwnerRole(m.role) ? " 👑" : ""}:</span><span className="text-[13px] ml-1">{m.text}</span></div></div>
         ))}
       </div>
 
