@@ -44,17 +44,6 @@ const TOTAL_SEATS = 12
 const EMOJIS = ["❤️","😂","😍","🔥","👏","🇸🇩","💚","😭"]
 const AUCTION_SEATS: Record<number, number> = { 2: 500, 3: 300 }
 
-// ✅ أغاني سودانية مقترحة
-const SUGGESTED_SONGS = [
-  { title: "زنق - حلاوة", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", type: "mp3" },
-  { title: "أغنية حماسية", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", type: "mp3" },
-]
-
-function getYoutubeId(url:string){
-  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([^?&/]+)/)
-  return m ? m[1] : null
-}
-
 export default function ChatRoomClient({ id }: { id: string }) {
   const [room, setRoom] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
@@ -72,11 +61,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
   const [legendEntry, setLegendEntry] = useState<any>(null)
   const [entranceEntry, setEntranceEntry] = useState<any>(null)
   const [showAd, setShowAd] = useState(true)
-  const [music, setMusic] = useState<any>(null)
-  const [showMusicPanel, setShowMusicPanel] = useState(false)
-  const [musicUrl, setMusicUrl] = useState("")
-  const [musicTitle, setMusicTitle] = useState("")
-  const audioRef = useRef<HTMLAudioElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(()=>{ return onAuthStateChanged(auth, setUser) },[])
@@ -105,29 +89,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
       const m:any={}; snap.docs.forEach(d=> m[Number(d.id)]=d.data()); setSeats(m)
     })
   },[id])
-
-  // ✅ موسيقى - لايف
-  useEffect(()=>{
-    if(!id) return
-    return onSnapshot(doc(db, `chatRooms/${id}/music/current`), snap=>{
-      if(snap.exists()) setMusic(snap.data())
-      else setMusic(null)
-    })
-  },[id])
-
-  // ✅ تشغيل الصوت تلقائياً لما المالك يشغل
-  useEffect(()=>{
-    if(!music) { audioRef.current?.pause(); return }
-    if(music.isPlaying && music.type !== "youtube"){
-      // mp3
-      if(audioRef.current){
-        audioRef.current.src = music.url
-        audioRef.current.play().catch(()=>{})
-      }
-    } else {
-      audioRef.current?.pause()
-    }
-  },[music])
 
   useEffect(()=>{
     if(!id || !user) return
@@ -220,26 +181,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     setText("")
   }
 
-  // ✅ وظائف الموسيقى - مالك الغرفة بس
   const isRoomOwner = room?.ownerUid===user?.uid
-  const playMusic = async (url:string, title:string) => {
-    if(!isRoomOwner) return alert("الموسيقى للمالك بس 👑")
-    const ytId = getYoutubeId(url)
-    const type = ytId ? "youtube" : "mp3"
-    const finalUrl = ytId ? `https://www.youtube.com/embed/${ytId}?autoplay=1` : url
-    await setDoc(doc(db, `chatRooms/${id}/music/current`), { url: finalUrl, rawUrl: url, ytId, type, title: title || "أغنية", isPlaying: true, playedBy: user.uid, playedByName: user.displayName, startedAt: serverTimestamp() })
-    setShowMusicPanel(false)
-    setMusicUrl(""); setMusicTitle("")
-    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:`🎵 المالك شغّل: ${title || url}`, isSystem:true, createdAt:serverTimestamp() })
-  }
-  const togglePlay = async () => {
-    if(!isRoomOwner || !music) return
-    await updateDoc(doc(db, `chatRooms/${id}/music/current`), { isPlaying: !music.isPlaying })
-  }
-  const stopMusic = async () => {
-    if(!isRoomOwner) return
-    await deleteDoc(doc(db, `chatRooms/${id}/music/current`))
-  }
 
   const getAvatarClass = (avatarFrameId:string) => AVATAR_FRAMES.find(f=>f.id===avatarFrameId)?.class || "border-transparent"
 
@@ -309,40 +251,11 @@ export default function ChatRoomClient({ id }: { id: string }) {
           <div className="text-center"><h2 className="font-black text-[14px] truncate max-w-[160px]">{room.decoratedName||room.name}</h2><p className="text-[10px] text-white/60">{joinedCount} الأعضاء • 🟢 {onlineCount} • 💰 {myCoins}</p></div>
         </div>
         <div className="flex items-center gap-1.5">
-          {/* ✅ زر الموسيقى - مالك بس */}
-          {isRoomOwner && <button onClick={()=>setShowMusicPanel(true)} className={`w-8 h-8 rounded-full flex items-center justify-center text-[14px] ${music?.isPlaying ? "bg-[#00E676] text-black animate-pulse" : "bg-white/10"}`}>🎵</button>}
           <div className="bg-white/10 px-2.5 py-1 rounded-full text-[11px]">🏆</div>
         </div>
       </div>
 
       <div className="relative z-10 p-2.5 px-3 shrink-0"><div className="grid grid-cols-4 gap-y-2.5 gap-x-2">{[1,2,3,4,5,6,7,8,9,10,11,12].map(renderSeat)}</div></div>
-
-      {/* ✅ مشغل الموسيقى - يظهر لكل الناس */}
-      {music && (
-        <div className="relative z-10 mx-3 mb-2 shrink-0">
-          <div className="bg-gradient-to-r from-violet-900/80 to-[#122025] border border-violet-500/30 rounded-[16px] overflow-hidden">
-            <div className="flex items-center gap-3 p-2.5">
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-[18px] shrink-0 ${music.isPlaying ? "animate-spin" : ""}`} style={{animationDuration: "3s"}}>🎵</div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-black truncate flex items-center gap-1">{music.isPlaying ? "🔊" : "⏸️"} {music.title} {music.isPlaying && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />}</p>
-                <p className="text-[10px] text-white/50 truncate">شغّلها المالك {music.playedByName || ""} • للكل</p>
-              </div>
-              {isRoomOwner ? (
-                <div className="flex gap-1 shrink-0">
-                  <button onClick={togglePlay} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-[14px]">{music.isPlaying ? "⏸️" : "▶️"}</button>
-                  <button onClick={stopMusic} className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center text-[12px]">⏹️</button>
-                </div>
-              ) : (
-                <span className="text-[10px] bg-white/10 px-2 py-1 rounded-full">🎧 الكل بيسمع</span>
-              )}
-            </div>
-            {music.type === "youtube" && music.isPlaying && (
-              <iframe src={music.url} className="w-full h-0 opacity-0 pointer-events-none" allow="autoplay" />
-            )}
-            <div className="h-[3px] bg-white/10"><div className={`h-full bg-violet-500 ${music.isPlaying ? "animate-pulse w-full" : "w-0"}`} /></div>
-          </div>
-        </div>
-      )}
 
       {showAd && (
         <div className="relative z-10 mx-3 mb-2 shrink-0">
@@ -391,52 +304,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
         <button className="w-10 h-10 shrink-0 bg-white/10 rounded-full flex items-center justify-center text-[18px]">🎙️</button>
         <button onClick={sendMessage} className="w-10 h-10 shrink-0 bg-[#00E676] rounded-full flex items-center justify-center text-black font-black">➤</button>
       </div>
-
-      {/* ✅ لوحة تحكم الموسيقى - للمالك بس */}
-      {showMusicPanel && (
-        <div className="fixed inset-0 bg-black/70 z-[150] flex items-end justify-center p-4" onClick={()=>setShowMusicPanel(false)}>
-          <div onClick={e=>e.stopPropagation()} className="bg-[#122025] rounded-[24px] p-5 w-full max-w-[400px] border border-white/10 max-h-[80vh] overflow-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-black text-[16px]">🎵 تشغيل الموسيقى - المالك بس</h3>
-              <button onClick={()=>setShowMusicPanel(false)} className="w-8 h-8 bg-white/10 rounded-full">✕</button>
-            </div>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="text-[12px] text-white/60 font-bold">رابط يوتيوب أو رابط MP3 مباشر</label>
-                <input value={musicUrl} onChange={e=>setMusicUrl(e.target.value)} placeholder="https://youtube.com/watch?v=... أو رابط mp3" className="w-full mt-1 bg-white/10 rounded-xl px-4 py-3 text-[13px] outline-none border border-transparent focus:border-violet-500/50" />
-              </div>
-              <div>
-                <label className="text-[12px] text-white/60 font-bold">اسم الأغنية</label>
-                <input value={musicTitle} onChange={e=>setMusicTitle(e.target.value)} placeholder="مثال: ود الباشا - حلوة" className="w-full mt-1 bg-white/10 rounded-xl px-4 py-3 text-[13px] outline-none border border-transparent focus:border-violet-500/50" />
-              </div>
-              <button onClick={()=>{ if(!musicUrl) return alert("حط رابط"); playMusic(musicUrl, musicTitle) }} className="w-full bg-[#00E676] text-black font-black py-3.5 rounded-full text-[14px]">▶️ شغّل للكل في الغرفة</button>
-              
-              <div className="pt-3 border-t border-white/10">
-                <p className="text-[12px] font-black mb-2">🎧 أغاني مقترحة (تجريبية)</p>
-                {SUGGESTED_SONGS.map((s,i)=>(
-                  <div key={i} className="flex items-center gap-3 bg-white/5 rounded-xl p-3 mb-2">
-                    <div className="w-10 h-10 bg-violet-500/20 rounded-full flex items-center justify-center">🎵</div>
-                    <div className="flex-1"><p className="text-[13px] font-bold">{s.title}</p><p className="text-[10px] text-white/40 truncate">{s.url.slice(0,30)}...</p></div>
-                    <button onClick={()=>playMusic(s.url, s.title)} className="bg-white text-black px-3 py-1.5 rounded-full text-[11px] font-black">شغل</button>
-                  </div>
-                ))}
-                <p className="text-[11px] text-white/40 text-center mt-3">💡 تقدر تجيب رابط MP3 مباشر من أي موقع أو تستخدم رابط يوتيوب، الكل حيسمع مع بعض</p>
-              </div>
-
-              {music && (
-                <div className="flex gap-2 pt-2">
-                  <button onClick={togglePlay} className="flex-1 bg-white/10 py-3 rounded-full font-black text-[13px]">{music.isPlaying ? "⏸️ وقّف" : "▶️ كمّل"}</button>
-                  <button onClick={stopMusic} className="flex-1 bg-red-500/20 text-red-400 py-3 rounded-full font-black text-[13px]">⏹️ إيقاف نهائي</button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* عنصر الصوت المخفي */}
-      <audio ref={audioRef} loop className="hidden" />
 
       {showAuction && (
         <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-6" onClick={()=>setShowAuction(null)}>
