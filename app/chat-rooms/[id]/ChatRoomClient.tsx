@@ -5,10 +5,9 @@ import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, addDoc, serverT
 import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
 
-// ✅ دالة واحدة للأونر - بتقبل "owner" و "مالك" عشان تتوافق مع ملف البروفايل حقك
+// ✅ دالة واحدة للأونر - بتقبل "owner" و "مالك"
 const isOwnerRole = (role: any) => role === "owner" || role === "مالك"
 
-// ===== زخرفة المقاعد والأسماء =====
 const SEAT_FRAMES = [
   { id: "none", label: "عادي", class: "bg-white/20", price: 0 },
   { id: "gold", label: "👑 ذهبي", class: "bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-[0_0_15px_rgba(234,179,8,0.5)]", price: 500 },
@@ -43,6 +42,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
   const [flying, setFlying] = useState<{id:number, emoji:string, left:number}[]>([])
   const [showAuction, setShowAuction] = useState<number | null>(null)
   const [legendEntry, setLegendEntry] = useState<any>(null)
+  const [showAd, setShowAd] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(()=>{ return onAuthStateChanged(auth, setUser) },[])
@@ -169,28 +169,29 @@ export default function ChatRoomClient({ id }: { id: string }) {
   }
 
   const isOwner = room?.ownerUid===user?.uid
+
+  // ✅ كراسي صغيرة - كانت 62px بقت 48px عشان نفضي مساحة للونسة
   const renderSeat = (num:number) => {
     const s=seats[num]; const isMe=s?.occupiedBy===user?.uid; const isAuction = !!AUCTION_SEATS[num]
     const frame = SEAT_FRAMES.find(f=> f.id === s?.frame) || SEAT_FRAMES[0]
     const nameColor = NAME_COLORS.find(c=> c.id === s?.nameColor) || NAME_COLORS[0]
-    // ✅ التعديل هنا - كان "owner" بس، هسه بيقبل "مالك" كمان
     const isLegendSeat = isOwnerRole(s?.role)
-    if(s?.locked) return <div key={num} className="flex flex-col items-center gap-1"><div className="w-[62px] h-[62px] rounded-full bg-white/10 flex items-center justify-center">🔒</div><span className="text-[12px] font-bold">{num}</span></div>
+    if(s?.locked) return <div key={num} className="flex flex-col items-center gap-0.5"><div className="w-[46px] h-[46px] rounded-full bg-white/10 flex items-center justify-center text-[15px]">🔒</div><span className="text-[10px] font-bold">{num}</span></div>
     if(s?.occupiedBy) return (
-      <div key={num} onClick={()=> isMe||isOwner?leaveSeat(num):{}} className="flex flex-col items-center gap-1 relative cursor-pointer">
-        {num===1 && <span className="absolute -top-1 -right-1 z-10 text-[10px] bg-yellow-400 text-black rounded-full w-5 h-5 flex items-center justify-center font-black animate-bounce">👑</span>}
-        {s.isAuction && <span className="absolute -top-2 left-0 z-10 bg-yellow-500 text-black text-[8px] font-black px-1.5 rounded-full">💰 VIP</span>}
-        {isLegendSeat && <span className="absolute -top-2 -left-1 z-10 text-[12px] animate-pulse">✨</span>}
-        <div className={`w-[68px] h-[68px] rounded-full p-[3px] ${frame.class} ${isMe ? "ring-2 ring-[#00E676]" : ""} ${isLegendSeat ? "ring-2 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.7)]" : ""}`}><img src={s.photo||`https://i.pravatar.cc/100?u=${s.occupiedBy}`} className="w-full h-full rounded-full object-cover bg-[#1A2E35] border-2 border-[#0B1416]" /></div>
-        <span className={`text-[11px] font-bold truncate max-w-[70px] ${nameColor.class}`}>{s.decoPrefix || ""} {s.name?.slice(0,6)} {num===1?"👑":""}</span>
-        {s.level && <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded-full font-black">Lv.{s.level} {isOwnerRole(s.role) ? "👑" : ""}</span>}
+      <div key={num} onClick={()=> isMe||isOwner?leaveSeat(num):{}} className="flex flex-col items-center gap-0.5 relative cursor-pointer">
+        {num===1 && <span className="absolute -top-1 -right-1 z-10 text-[8px] bg-yellow-400 text-black rounded-full w-4 h-4 flex items-center justify-center font-black">👑</span>}
+        {s.isAuction && <span className="absolute -top-1.5 left-0 z-10 bg-yellow-500 text-black text-[6px] font-black px-1 rounded-full">💰</span>}
+        {isLegendSeat && <span className="absolute -top-1 -left-1 z-10 text-[10px]">✨</span>}
+        <div className={`w-[50px] h-[50px] rounded-full p-[2px] ${frame.class} ${isMe ? "ring-2 ring-[#00E676]" : ""} ${isLegendSeat ? "ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.7)]" : ""}`}><img src={s.photo||`https://i.pravatar.cc/100?u=${s.occupiedBy}`} className="w-full h-full rounded-full object-cover bg-[#1A2E35] border border-[#0B1416]" /></div>
+        <span className={`text-[9px] font-bold truncate max-w-[56px] ${nameColor.class}`}>{s.decoPrefix || ""} {s.name?.slice(0,5)} {num===1?"👑":""}</span>
+        {s.level && <span className="text-[7px] bg-white/10 px-1 py-0 rounded-full font-black">Lv.{s.level} {isOwnerRole(s.role) ? "👑" : ""}</span>}
       </div>
     )
     return (
-      <div key={num} onClick={()=>takeSeat(num)} className="flex flex-col items-center gap-1 cursor-pointer relative">
-        {isAuction && <span className="absolute -top-2 z-10 bg-yellow-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">💰 {AUCTION_SEATS[num]}</span>}
-        <div className={`w-[62px] h-[62px] rounded-full bg-white/5 border-2 border-dashed flex items-center justify-center ${isAuction?"border-yellow-400/50":"border-white/15"} hover:border-[#00E676]/50 transition`}><span className="text-white/40 text-[20px]">🪑</span></div>
-        <span className="text-[12px] font-bold text-white/60">{num===1?"المالك":num}</span>
+      <div key={num} onClick={()=>takeSeat(num)} className="flex flex-col items-center gap-0.5 cursor-pointer relative">
+        {isAuction && <span className="absolute -top-1.5 z-10 bg-yellow-500 text-black text-[7px] font-black px-1 py-0 rounded-full">💰 {AUCTION_SEATS[num]}</span>}
+        <div className={`w-[46px] h-[46px] rounded-full bg-white/[0.04] border border-dashed flex items-center justify-center ${isAuction?"border-yellow-400/50":"border-white/15"} hover:border-[#00E676]/50`}><span className="text-white/30 text-[15px]">🪑</span></div>
+        <span className="text-[10px] font-bold text-white/50">{num===1?"المالك":num}</span>
       </div>
     )
   }
@@ -201,7 +202,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     <div className="h-[100dvh] flex flex-col text-white relative overflow-hidden">
       <div className="absolute inset-0"><div className="absolute inset-0 bg-gradient-to-b from-[#0F2A2E] via-[#122025] to-[#0B1416]" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#00E676]/10 rounded-full blur-[80px]" /><div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-orange-500/10 rounded-full blur-[90px]" /></div>
 
-      {/* ===== دخول الهيبة - الشاشة تولع ===== */}
+      {/* ===== دخول الهيبة ===== */}
       {legendEntry && (
         <div className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
           <div className="absolute inset-0 bg-gradient-to-br from-[#00E676]/30 via-yellow-400/20 to-transparent animate-pulse" />
@@ -226,7 +227,8 @@ export default function ChatRoomClient({ id }: { id: string }) {
         <style>{`@keyframes flyUp { 0%{ transform: translateY(0) scale(0.5); opacity:0 } 20%{ opacity:1 } 100%{ transform: translateY(-400px) scale(1.4); opacity:0 } }`}</style>
       </div>
 
-      <div className="relative z-10 bg-black/20 backdrop-blur p-3 flex items-center justify-between border-b border-white/5">
+      {/* هيدر */}
+      <div className="relative z-10 bg-black/20 backdrop-blur p-3 flex items-center justify-between border-b border-white/5 shrink-0">
         <div className="flex items-center gap-2"><Link href="/chat-rooms" className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">✕</Link><button className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">↗️</button></div>
         <div className="flex items-center gap-2 flex-1 justify-center">
           <button onClick={()=>!isJoined&&setIsJoined(true)} className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${isJoined?"bg-white/20":"bg-[#00E676] text-black"}`}>+</button>
@@ -235,21 +237,49 @@ export default function ChatRoomClient({ id }: { id: string }) {
         <div className="flex items-center gap-1.5"><div className="bg-white/10 px-2.5 py-1 rounded-full text-[11px]">🏆 الترتيب</div><div className="bg-yellow-500/20 px-2 py-1 rounded-full text-[11px]">👜</div></div>
       </div>
 
-      <div className="relative z-10 p-4"><div className="grid grid-cols-4 gap-4">{[1,2,3,4,5,6,7,8,9,10,11,12].map(renderSeat)}</div></div>
+      {/* ✅ كراسي - صغيرة ومضغوطة */}
+      <div className="relative z-10 p-2.5 px-3 shrink-0"><div className="grid grid-cols-4 gap-y-2.5 gap-x-2">{[1,2,3,4,5,6,7,8,9,10,11,12].map(renderSeat)}</div></div>
 
-      <div className="relative z-10 flex justify-center gap-2 -mt-1 mb-1">
-        {["🔥","❤️","🎉","👏","🇸🇩"].map(e=> <button key={e} onClick={()=>sendReaction(e)} className="w-9 h-9 bg-white/10 rounded-full text-[18px] hover:bg-white/20 active:scale-125 transition">{e}</button>)}
+      {/* ✅ مساحة إعلان - بين الكراسي والونسة */}
+      {showAd && (
+        <div className="relative z-10 mx-3 mb-2 shrink-0">
+          <div className="bg-gradient-to-r from-[#1A2E35] to-[#122025] border border-white/10 rounded-[16px] overflow-hidden">
+            <div className="flex items-center gap-3 p-2.5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-[20px] shrink-0">📢</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-black truncate">🔥 عرض اليوم - اشحن 5000 كوينز وخد 1000 هدية</p>
+                <p className="text-[10px] text-white/50 truncate">اضغط هنا للشحن • الدفع عبر بنكك / رصيد</p>
+              </div>
+              <Link href="/profile" className="bg-yellow-500 text-black text-[11px] font-black px-3 py-2 rounded-full shrink-0">اشحن</Link>
+              <button onClick={()=>setShowAd(false)} className="text-white/40 text-[12px] px-1">✕</button>
+            </div>
+            <div className="h-[3px] bg-white/5"><div className="h-full w-2/3 bg-yellow-500" /></div>
+          </div>
+        </div>
+      )}
+
+      {/* أزرار التفاعل - صغيرة */}
+      <div className="relative z-10 flex justify-center gap-2 mb-1.5 shrink-0">
+        {["🔥","❤️","🎉","👏","🇸🇩"].map(e=> <button key={e} onClick={()=>sendReaction(e)} className="w-8 h-8 bg-white/10 rounded-full text-[16px] hover:bg-white/20 active:scale-125 transition">{e}</button>)}
       </div>
 
-      <div className="relative z-10 mx-4 bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-3 text-[12px] text-white/70 text-center">💬 ممنوع الإساءة - خليك محترم • استمتع بالونسة السودانية 🇸🇩</div>
+      {/* ✅ منطقة النصوص - بقت أكبر وأوسع */}
+      <div className="relative z-10 mx-3 bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-2.5 text-[11px] text-white/70 text-center shrink-0">💬 ممنوع الإساءة - خليك محترم • استمتع بالونسة السودانية 🇸🇩</div>
 
-      <div ref={scrollRef} className="relative z-10 flex-1 overflow-auto p-3 space-y-2 mt-2">
-        {messages.slice(-30).map(m=> m.isSystem ? <div key={m.id} className="flex items-center gap-2 text-[12px] text-white/60 bg-white/5 w-fit px-3 py-1.5 rounded-full"><span>👋</span><p>{m.text}</p></div> : (
-          <div key={m.id} className="flex gap-2"><img src={m.photo||`https://i.pravatar.cc/100?u=${m.uid}`} className="w-7 h-7 rounded-full" /><div className="bg-white/10 rounded-2xl px-3 py-1.5 max-w-[75%]"><span className={`text-[11px] font-black ${isOwnerRole(m.role) ? "text-yellow-400" : "text-[#00E676]"}`}>{m.decoPrefix || ""} {m.displayName}{isOwnerRole(m.role) ? " 👑" : ""}:</span><span className="text-[13px] ml-1">{m.text}</span></div></div>
+      <div ref={scrollRef} className="relative z-10 flex-1 overflow-auto p-3 space-y-2 mt-2 min-h-0">
+        {messages.length === 0 && (
+          <div className="text-center text-white/30 text-[12px] py-6">
+            <p className="text-[30px]">💬</p>
+            <p className="mt-1 font-bold">لسه مافي رسائل - كن أول من يبدأ الونسة!</p>
+          </div>
+        )}
+        {messages.slice(-50).map(m=> m.isSystem ? <div key={m.id} className="flex items-center gap-2 text-[12px] text-white/60 bg-white/5 w-fit px-3 py-1.5 rounded-full"><span>👋</span><p>{m.text}</p></div> : (
+          <div key={m.id} className="flex gap-2"><img src={m.photo||`https://i.pravatar.cc/100?u=${m.uid}`} className="w-7 h-7 rounded-full shrink-0" /><div className="bg-white/10 rounded-2xl px-3 py-1.5 max-w-[80%]"><span className={`text-[11px] font-black ${isOwnerRole(m.role) ? "text-yellow-400" : "text-[#00E676]"}`}>{m.decoPrefix || ""} {m.displayName}{isOwnerRole(m.role) ? " 👑" : ""}:</span><span className="text-[13px] ml-1 break-words">{m.text}</span></div></div>
         ))}
       </div>
 
-      <div className="relative z-10 bg-black/40 backdrop-blur border-t border-white/10 p-2.5 flex items-center gap-2">
+      {/* إدخال الرسالة */}
+      <div className="relative z-10 bg-black/40 backdrop-blur border-t border-white/10 p-2.5 flex items-center gap-2 shrink-0">
         <button className="w-10 h-10 shrink-0 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center text-[18px]">🎁</button>
         <button className="w-10 h-10 shrink-0 bg-white/10 rounded-full flex items-center justify-center text-[18px]">🌹</button>
         <div className="flex-1 min-w-0 bg-white/10 rounded-full flex items-center px-3">
@@ -270,7 +300,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
           </div>
         </div>
       )}
-      {showEmoji && <div className="relative z-10 bg-[#122025] p-2 grid grid-cols-8 gap-1">{EMOJIS.map(e=> <button key={e} onClick={()=>setText(t=>t+e)} className="text-[20px] p-2">{e}</button>)}</div>}
+      {showEmoji && <div className="relative z-10 bg-[#122025] p-2 grid grid-cols-8 gap-1 shrink-0">{EMOJIS.map(e=> <button key={e} onClick={()=>setText(t=>t+e)} className="text-[20px] p-2">{e}</button>)}</div>}
     </div>
   )
 }
