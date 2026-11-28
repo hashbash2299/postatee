@@ -26,8 +26,7 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
 
   useEffect(()=>{
     if(!id) return
-    // ✅ مع معالجة خطأ - لو فشل ما يوقع الصفحة
-    return onSnapshot(doc(db, `chatRooms/${id}/music/current`),
+    return onSnapshot(doc(db, `chatRooms/${id}/music_current`),
       snap=> setMusic(snap.exists() ? snap.data() : null),
       ()=> setMusic(null)
     )
@@ -35,8 +34,7 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
 
   useEffect(()=>{
     if(!id) return
-    // ✅ بدون orderBy - الترتيب بنعملو في المتصفح، عشان ما يحتاج Index
-    return onSnapshot(collection(db, `chatRooms/${id}/music/playlist`),
+    return onSnapshot(collection(db, `chatRooms/${id}/music_playlist`),
       snap=>{
         const list = snap.docs.map(d=>({id:d.id, ...d.data() as any})).sort((a:any,b:any)=> (a.order ?? 0) - (b.order ?? 0))
         setPlaylist(list)
@@ -62,7 +60,7 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
     const type = ytId ? "youtube" : "mp3"
     const finalUrl = ytId ? `https://www.youtube.com/embed/${ytId}?autoplay=1` : url
     try{
-      const ref = await addDoc(collection(db, `chatRooms/${id}/music/playlist`), { url: finalUrl, rawUrl: url, ytId, type, title: title || "أغنية", order: playlist.length + 1, addedBy: user.uid, addedAt: serverTimestamp() })
+      const ref = await addDoc(collection(db, `chatRooms/${id}/music_playlist`), { url: finalUrl, rawUrl: url, ytId, type, title: title || "أغنية", order: playlist.length + 1, addedBy: user.uid, addedAt: serverTimestamp() })
       setMusicUrl(""); setMusicTitle("")
       if(autoPlay || playlist.length === 0) await playFromPlaylist({id: ref.id, url: finalUrl, rawUrl: url, ytId, type, title: title || "أغنية"}, playlist.length)
     }catch(e:any){ alert("مشكلة في الصلاحيات: " + e.message) }
@@ -70,7 +68,7 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
 
   const playFromPlaylist = async (song:any, index:number) => {
     if(!isRoomOwner || !user?.uid) return
-    await setDoc(doc(db, `chatRooms/${id}/music/current`), { url: song.url, rawUrl: song.rawUrl, ytId: song.ytId || null, type: song.type, title: song.title, isPlaying: true, currentId: song.id, currentIndex: index, playedBy: user.uid, playedByName: user.displayName, startedAt: serverTimestamp() })
+    await setDoc(doc(db, `chatRooms/${id}/music_current`), { url: song.url, rawUrl: song.rawUrl, ytId: song.ytId || null, type: song.type, title: song.title, isPlaying: true, currentId: song.id, currentIndex: index, playedBy: user.uid, playedByName: user.displayName, startedAt: serverTimestamp() })
   }
 
   const playNext = async () => {
@@ -92,23 +90,23 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
 
   const togglePlay = async () => {
     if(!isRoomOwner || !music) return
-    await updateDoc(doc(db, `chatRooms/${id}/music/current`), { isPlaying: !music.isPlaying })
+    await updateDoc(doc(db, `chatRooms/${id}/music_current`), { isPlaying: !music.isPlaying })
   }
 
   const stopMusic = async () => {
     if(!isRoomOwner) return
-    await deleteDoc(doc(db, `chatRooms/${id}/music/current`))
+    await deleteDoc(doc(db, `chatRooms/${id}/music_current`))
   }
 
   const removeFromPlaylist = async (songId:string) => {
     if(!isRoomOwner) return
     if(music?.currentId === songId) await stopMusic()
-    await deleteDoc(doc(db, `chatRooms/${id}/music/playlist/${songId}`))
+    await deleteDoc(doc(db, `chatRooms/${id}/music_playlist/${songId}`))
   }
 
   const clearPlaylist = async () => {
     if(!isRoomOwner || !confirm("امسح كل القائمة؟")) return
-    for(const s of playlist) await deleteDoc(doc(db, `chatRooms/${id}/music/playlist/${s.id}`))
+    for(const s of playlist) await deleteDoc(doc(db, `chatRooms/${id}/music_playlist/${s.id}`))
     await stopMusic()
   }
 
