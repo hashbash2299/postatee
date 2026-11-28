@@ -41,7 +41,6 @@ const ENTRANCES: any = {
   legend: { label: "دخول أسطوري ⚡", icon: "⚡", emojis: ["⚡","🔥","💎","👑","🌟","⚡"], bg: "from-violet-500/40 via-yellow-400/20 to-transparent", text: "أسطورة دخلت... الكل يسكت ⚡" },
 }
 
-const TOTAL_SEATS = 12
 const EMOJIS = ["❤️","😂","😍","🔥","👏","🇸🇩","💚","😭"]
 const AUCTION_SEATS: Record<number, number> = { 2: 500, 3: 300 }
 
@@ -63,40 +62,49 @@ export default function ChatRoomClient({ id }: { id: string }) {
   const [entranceEntry, setEntranceEntry] = useState<any>(null)
   const [showAd, setShowAd] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const profileRef = useRef<any>(null)
+  const joinedRef = useRef(false)
 
   useEffect(()=>{ return onAuthStateChanged(auth, setUser) },[])
+
+  useEffect(()=>{ profileRef.current = userProfile },[userProfile])
 
   useEffect(()=>{
     if(!id) return
     const load = async () => {
-      let snap = await getDoc(doc(db, "customRooms", id))
-      if(snap.exists()){ setRoom({id: snap.id, ...snap.data()}); return }
-      snap = await getDoc(doc(db, "chatRooms", id))
-      if(snap.exists()){ setRoom({id: snap.id, ...snap.data()}); return }
-      setRoom({ id, name: "مملكة القلوب", decoratedName: "مملكة القلوب ❤️", ownerUid: user?.uid })
+      try{
+        let snap = await getDoc(doc(db, "customRooms", id))
+        if(snap.exists()){ setRoom({id: snap.id, ...snap.data()}); return }
+        snap = await getDoc(doc(db, "chatRooms", id))
+        if(snap.exists()){ setRoom({id: snap.id, ...snap.data()}); return }
+        setRoom({ id, name: "مملكة القلوب", decoratedName: "مملكة القلوب ❤️", ownerUid: user?.uid })
+      }catch(e){ setRoom({ id, name: "مملكة القلوب", decoratedName: "مملكة القلوب ❤️", ownerUid: user?.uid }) }
     }
     load()
-  },[id])
+  },[id, user?.uid])
 
   useEffect(()=>{
     if(!user) return
-    const unsub = onSnapshot(doc(db,"users",user.uid), s=>{ if(s.exists()){ setMyCoins(s.data().coins ?? 1000); setUserProfile(s.data()) } })
-    return ()=> unsub()
+    return onSnapshot(doc(db,"users",user.uid), s=>{ if(s.exists()){ setMyCoins(s.data().coins ?? 1000); setUserProfile(s.data()) } }, ()=>{})
   },[user])
 
   useEffect(()=>{
     if(!id) return
     return onSnapshot(collection(db, `chatRooms/${id}/seats`), snap=>{
       const m:any={}; snap.docs.forEach(d=> m[Number(d.id)]=d.data()); setSeats(m)
-    })
+    }, ()=>{})
   },[id])
 
+  // ✅ FIX: يشتغل مرة واحدة بس، وما يحذفك كل ما البروفايل يتغير
   useEffect(()=>{
     if(!id || !user) return
-    const isLegend = isOwnerRole(userProfile?.role)
-    const myEntrance = userProfile?.entrance || "none"
+    if(joinedRef.current) return
+    joinedRef.current = true
+    const profile = profileRef.current || {}
+    const isLegend = isOwnerRole(profile?.role)
+    const myEntrance = profile?.entrance || "none"
     const myRef = doc(db, `chatRooms/${id}/online/${user.uid}`)
-    setDoc(myRef, { uid:user.uid, joinedAt:serverTimestamp(), name:user.displayName, photo:user.photoURL || userProfile?.avatar || "", role: userProfile?.role || "member", isLegend, entrance: myEntrance }, { merge:true })
+    setDoc(myRef, { uid:user.uid, joinedAt:serverTimestamp(), name:user.displayName, photo:user.photoURL || profile?.avatar || "", role: profile?.role || "member", isLegend, entrance: myEntrance }, { merge:true }).catch(()=>{})
     const unsub = onSnapshot(collection(db, `chatRooms/${id}/online`), s=>{
       setOnlineCount(s.size); setJoinedCount(s.size)
       s.docChanges().forEach(change=>{
@@ -106,12 +114,12 @@ export default function ChatRoomClient({ id }: { id: string }) {
           else if(d.entrance && d.entrance !== "none" && ENTRANCES[d.entrance]){ setEntranceEntry({...d, entranceData: ENTRANCES[d.entrance]}); setTimeout(()=> setEntranceEntry(null), 3500) }
         }
       })
-    })
-    if(isLegend){ setLegendEntry({ name: user.displayName, role: userProfile?.role, photo: user.photoURL }); setTimeout(()=> setLegendEntry(null), 4500) }
+    }, ()=>{})
+    if(isLegend){ setLegendEntry({ name: user.displayName, role: profile?.role, photo: user.photoURL }); setTimeout(()=> setLegendEntry(null), 4500) }
     else if(myEntrance !== "none" && ENTRANCES[myEntrance]){ setEntranceEntry({ name: user.displayName, photo: user.photoURL, entranceData: ENTRANCES[myEntrance] }); setTimeout(()=> setEntranceEntry(null), 3500) }
     setIsJoined(true)
-    return ()=>{ deleteDoc(myRef).catch(()=>{}); unsub() }
-  },[id,user,userProfile?.role,userProfile?.entrance])
+    return ()=>{ joinedRef.current = false; deleteDoc(myRef).catch(()=>{}); unsub() }
+  },[id, user])
 
   useEffect(()=>{
     if(!id) return
@@ -119,7 +127,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     return onSnapshot(q, snap=>{
       setMessages(snap.docs.map(d=>({id:d.id,...d.data()})))
       setTimeout(()=> scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight),100)
-    })
+    }, ()=>{})
   },[id])
 
   const sendReaction = (emoji:string) => {
@@ -127,7 +135,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     const left = 20 + Math.random()*60
     setFlying(prev=>[...prev, {id:idR, emoji, left}])
     setTimeout(()=> setFlying(prev=>prev.filter(f=>f.id!==idR)), 2500)
-    addDoc(collection(db, `chatRooms/${id}/reactions`), { emoji, uid: user?.uid, createdAt: serverTimestamp() })
+    addDoc(collection(db, `chatRooms/${id}/reactions`), { emoji, uid: user?.uid, createdAt: serverTimestamp() }).catch(()=>{})
   }
 
   useEffect(()=>{
@@ -142,7 +150,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
           setTimeout(()=> setFlying(prev=>prev.filter(f=>f.id!==idR)),2500)
         }
       })
-    })
+    }, ()=>{})
   },[id, user])
 
   const takeSeat = async (num:number) => {
@@ -152,34 +160,40 @@ export default function ChatRoomClient({ id }: { id: string }) {
     if(seat?.locked) return alert("المقعد مقفل 🔒")
     if(seat?.occupiedBy) return alert("المقعد مشغول")
     if(AUCTION_SEATS[num]){ setShowAuction(num); return }
-    const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
-    if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
-    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", frame: userProfile?.seatFrame || "none", avatarFrame: userProfile?.avatarFrame || "none", nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", decoId: userProfile?.decoId || "none", entrance: userProfile?.entrance || "none", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
+    try{
+      const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
+      if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
+      await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", frame: userProfile?.seatFrame || "none", avatarFrame: userProfile?.avatarFrame || "none", nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", decoId: userProfile?.decoId || "none", entrance: userProfile?.entrance || "none", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
+    }catch(e){ console.log(e) }
   }
 
   const buyAuctionSeat = async (num:number) => {
     const price = AUCTION_SEATS[num]
     if(myCoins < price) return alert(`كوينزك ${myCoins} ما كافية! تحتاج ${price}`)
-    setMyCoins(c=>c-price)
-    await updateDoc(doc(db,"users",user.uid), { coins: increment(-price) }).catch(()=>{})
-    if(room?.ownerUid) await updateDoc(doc(db,"users",room.ownerUid), { coins: increment(price) }).catch(()=>{})
-    const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
-    if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
-    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", isAuction:true, price, frame: userProfile?.seatFrame || "gold", avatarFrame: userProfile?.avatarFrame || "none", nameColor: userProfile?.nameColor || "gold", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", decoId: userProfile?.decoId || "none", entrance: userProfile?.entrance || "none", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
-    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:`💰 ${user.displayName} اشترى مقعد ${num} بـ ${price} كوينز`, isSystem:true, createdAt:serverTimestamp() })
-    setShowAuction(null)
+    try{
+      setMyCoins(c=>c-price)
+      await updateDoc(doc(db,"users",user.uid), { coins: increment(-price) }).catch(()=>{})
+      if(room?.ownerUid) await updateDoc(doc(db,"users",room.ownerUid), { coins: increment(price) }).catch(()=>{})
+      const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
+      if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
+      await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", isAuction:true, price, frame: userProfile?.seatFrame || "gold", avatarFrame: userProfile?.avatarFrame || "none", nameColor: userProfile?.nameColor || "gold", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", decoId: userProfile?.decoId || "none", entrance: userProfile?.entrance || "none", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
+      await addDoc(collection(db, `chatRooms/${id}/messages`), { text:`💰 ${user.displayName} اشترى مقعد ${num} بـ ${price} كوينز`, isSystem:true, createdAt:serverTimestamp() })
+      setShowAuction(null)
+    }catch(e){ console.log(e) }
   }
 
   const leaveSeat = async (num:number) => {
     const seat=seats[num]
     if(seat?.occupiedBy!==user?.uid && room?.ownerUid!==user?.uid) return
-    await deleteDoc(doc(db, `chatRooms/${id}/seats/${num}`))
+    try{ await deleteDoc(doc(db, `chatRooms/${id}/seats/${num}`)) }catch(e){}
   }
 
   const sendMessage = async () => {
     if(!text.trim()||!user) return
-    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:text.trim(), uid:user.uid, displayName:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL, nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", role: userProfile?.role || "member", createdAt:serverTimestamp() })
-    setText("")
+    try{
+      await addDoc(collection(db, `chatRooms/${id}/messages`), { text:text.trim(), uid:user.uid, displayName:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL, nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", role: userProfile?.role || "member", createdAt:serverTimestamp() })
+      setText("")
+    }catch(e){ console.log(e) }
   }
 
   const isRoomOwner = room?.ownerUid===user?.uid
@@ -258,9 +272,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
       <div className="relative z-10 p-2.5 px-3 shrink-0"><div className="grid grid-cols-4 gap-y-2.5 gap-x-2">{[1,2,3,4,5,6,7,8,9,10,11,12].map(renderSeat)}</div></div>
 
-{/* ✅ مشغل الموسيقى */}
-<MusicPlayer id={id} user={user} isRoomOwner={isRoomOwner} />
-
+      <MusicPlayer id={id} user={user} isRoomOwner={isRoomOwner} />
 
       {showAd && (
         <div className="relative z-10 mx-3 mb-2 shrink-0">

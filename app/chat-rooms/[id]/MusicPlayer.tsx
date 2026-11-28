@@ -68,46 +68,59 @@ export default function MusicPlayer({ id, user, isRoomOwner }: { id: string, use
 
   const playFromPlaylist = async (song:any, index:number) => {
     if(!isRoomOwner || !user?.uid) return
-    await setDoc(doc(db, `chatRooms/${id}/music_current`), { url: song.url, rawUrl: song.rawUrl, ytId: song.ytId || null, type: song.type, title: song.title, isPlaying: true, currentId: song.id, currentIndex: index, playedBy: user.uid, playedByName: user.displayName, startedAt: serverTimestamp() })
+    try{
+      await setDoc(doc(db, `chatRooms/${id}/music_current`), { url: song.url, rawUrl: song.rawUrl, ytId: song.ytId || null, type: song.type, title: song.title, isPlaying: true, currentId: song.id, currentIndex: index, playedBy: user.uid, playedByName: user.displayName, startedAt: serverTimestamp() })
+    }catch(e){ console.log("play error", e) }
   }
 
   const playNext = async () => {
     if(!isRoomOwner || !playlist.length) return
-    let next = isShuffle ? Math.floor(Math.random()*playlist.length) : (music?.currentIndex ?? -1) + 1
-    if(next >= playlist.length){
-      if(isLoop) next = 0
-      else { await stopMusic(); return }
-    }
-    await playFromPlaylist(playlist[next], next)
+    try{
+      let next = isShuffle ? Math.floor(Math.random()*playlist.length) : (music?.currentIndex ?? -1) + 1
+      if(next >= playlist.length){
+        if(isLoop) next = 0
+        else { await stopMusic(); return }
+      }
+      await playFromPlaylist(playlist[next], next)
+    }catch(e){ console.log(e) }
   }
 
   const playPrev = async () => {
     if(!isRoomOwner) return
-    const cur = music?.currentIndex ?? 0
-    const prev = cur - 1 < 0 ? playlist.length - 1 : cur - 1
-    if(playlist[prev]) await playFromPlaylist(playlist[prev], prev)
+    try{
+      const cur = music?.currentIndex ?? 0
+      const prev = cur - 1 < 0 ? playlist.length - 1 : cur - 1
+      if(playlist[prev]) await playFromPlaylist(playlist[prev], prev)
+    }catch(e){ console.log(e) }
   }
 
   const togglePlay = async () => {
     if(!isRoomOwner || !music) return
-    await updateDoc(doc(db, `chatRooms/${id}/music_current`), { isPlaying: !music.isPlaying })
+    try{
+      // ✅ setDoc بدل updateDoc عشان لو اتمسحت ما يوقع الصفحة
+      await setDoc(doc(db, `chatRooms/${id}/music_current`), { ...music, isPlaying: !music.isPlaying }, { merge: true })
+    }catch(e){ console.log(e) }
   }
 
   const stopMusic = async () => {
     if(!isRoomOwner) return
-    await deleteDoc(doc(db, `chatRooms/${id}/music_current`))
+    try{ await deleteDoc(doc(db, `chatRooms/${id}/music_current`)) }catch(e){ console.log(e) }
   }
 
   const removeFromPlaylist = async (songId:string) => {
     if(!isRoomOwner) return
-    if(music?.currentId === songId) await stopMusic()
-    await deleteDoc(doc(db, `chatRooms/${id}/music_playlist/${songId}`))
+    try{
+      if(music?.currentId === songId) await stopMusic()
+      await deleteDoc(doc(db, `chatRooms/${id}/music_playlist/${songId}`))
+    }catch(e){ console.log(e) }
   }
 
   const clearPlaylist = async () => {
     if(!isRoomOwner || !confirm("امسح كل القائمة؟")) return
-    for(const s of playlist) await deleteDoc(doc(db, `chatRooms/${id}/music_playlist/${s.id}`))
-    await stopMusic()
+    try{
+      for(const s of playlist) await deleteDoc(doc(db, `chatRooms/${id}/music_playlist/${s.id}`))
+      await stopMusic()
+    }catch(e){ console.log(e) }
   }
 
   return (
