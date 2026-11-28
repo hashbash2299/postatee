@@ -6,7 +6,6 @@ import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
 import StoreBanner from "./StoreBanner"
 
-// ✅ دالة واحدة للأونر - بتقبل "owner" و "مالك"
 const isOwnerRole = (role: any) => role === "owner" || role === "مالك"
 
 const SEAT_FRAMES = [
@@ -23,8 +22,6 @@ const NAME_COLORS = [
   { id: "green", label: "أخضر نيون", class: "text-[#00E676] font-black", price: 300 },
   { id: "rainbow", label: "قوس قزح", class: "bg-gradient-to-r from-pink-500 via-yellow-400 to-cyan-400 bg-clip-text text-transparent font-black", price: 1000 },
 ]
-
-// ✅ إطارات الصورة - نفس المتجر
 const AVATAR_FRAMES = [
   { id: "none", class: "border-transparent" },
   { id: "gold_ring", class: "border-yellow-400 border-[3px] shadow-[0_0_12px_rgba(250,204,21,0.6)]" },
@@ -34,20 +31,6 @@ const AVATAR_FRAMES = [
   { id: "diamond_ring", class: "border-white border-[3px] shadow-[0_0_20px_rgba(255,255,255,0.9)]" },
   { id: "king_frame", class: "border-yellow-300 border-[4px] shadow-[0_0_20px_rgba(250,204,21,0.9)]" },
 ]
-
-// ✅ زخارف الاسم - للعرض في الكرسي والرسائل
-const NAME_DECORATIONS = [
-  { id: "none", prefix: "", suffix: "" },
-  { id: "crown", prefix: "👑 ", suffix: " 👑" },
-  { id: "fire", prefix: "🔥 ", suffix: " 🔥" },
-  { id: "heart", prefix: "❤️ ", suffix: " ❤️" },
-  { id: "star", prefix: "⭐ ", suffix: " ⭐" },
-  { id: "brackets", prefix: "〖", suffix: "〗" },
-  { id: "angel", prefix: "😇 ", suffix: " 😇" },
-  { id: "king", prefix: "♔ ", suffix: " ♔" },
-]
-
-// ✅ دخول مميز - الأسعار من المتجر
 const ENTRANCES: any = {
   none: null,
   fire_entry: { label: "دخول ناري 🔥", icon: "🔥", emojis: ["🔥","🔥","🧨","🔥","💥","🔥"], bg: "from-orange-500/40 via-red-500/20 to-transparent", text: "دخل الغرفة... الشاشة ولعت 🔥" },
@@ -60,6 +43,17 @@ const ENTRANCES: any = {
 const TOTAL_SEATS = 12
 const EMOJIS = ["❤️","😂","😍","🔥","👏","🇸🇩","💚","😭"]
 const AUCTION_SEATS: Record<number, number> = { 2: 500, 3: 300 }
+
+// ✅ أغاني سودانية مقترحة
+const SUGGESTED_SONGS = [
+  { title: "زنق - حلاوة", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", type: "mp3" },
+  { title: "أغنية حماسية", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", type: "mp3" },
+]
+
+function getYoutubeId(url:string){
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([^?&/]+)/)
+  return m ? m[1] : null
+}
 
 export default function ChatRoomClient({ id }: { id: string }) {
   const [room, setRoom] = useState<any>(null)
@@ -78,6 +72,11 @@ export default function ChatRoomClient({ id }: { id: string }) {
   const [legendEntry, setLegendEntry] = useState<any>(null)
   const [entranceEntry, setEntranceEntry] = useState<any>(null)
   const [showAd, setShowAd] = useState(true)
+  const [music, setMusic] = useState<any>(null)
+  const [showMusicPanel, setShowMusicPanel] = useState(false)
+  const [musicUrl, setMusicUrl] = useState("")
+  const [musicTitle, setMusicTitle] = useState("")
+  const audioRef = useRef<HTMLAudioElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(()=>{ return onAuthStateChanged(auth, setUser) },[])
@@ -107,7 +106,29 @@ export default function ChatRoomClient({ id }: { id: string }) {
     })
   },[id])
 
-  // ===== دخول الهيبة + الدخول المميز 🔥 =====
+  // ✅ موسيقى - لايف
+  useEffect(()=>{
+    if(!id) return
+    return onSnapshot(doc(db, `chatRooms/${id}/music/current`), snap=>{
+      if(snap.exists()) setMusic(snap.data())
+      else setMusic(null)
+    })
+  },[id])
+
+  // ✅ تشغيل الصوت تلقائياً لما المالك يشغل
+  useEffect(()=>{
+    if(!music) { audioRef.current?.pause(); return }
+    if(music.isPlaying && music.type !== "youtube"){
+      // mp3
+      if(audioRef.current){
+        audioRef.current.src = music.url
+        audioRef.current.play().catch(()=>{})
+      }
+    } else {
+      audioRef.current?.pause()
+    }
+  },[music])
+
   useEffect(()=>{
     if(!id || !user) return
     const isLegend = isOwnerRole(userProfile?.role)
@@ -119,23 +140,13 @@ export default function ChatRoomClient({ id }: { id: string }) {
       s.docChanges().forEach(change=>{
         if(change.type === "added" && change.doc.id !== user.uid){
           const d = change.doc.data()
-          if(d.isLegend){
-            setLegendEntry(d)
-            setTimeout(()=> setLegendEntry(null), 4500)
-          } else if(d.entrance && d.entrance !== "none" && ENTRANCES[d.entrance]){
-            setEntranceEntry({...d, entranceData: ENTRANCES[d.entrance]})
-            setTimeout(()=> setEntranceEntry(null), 3500)
-          }
+          if(d.isLegend){ setLegendEntry(d); setTimeout(()=> setLegendEntry(null), 4500) }
+          else if(d.entrance && d.entrance !== "none" && ENTRANCES[d.entrance]){ setEntranceEntry({...d, entranceData: ENTRANCES[d.entrance]}); setTimeout(()=> setEntranceEntry(null), 3500) }
         }
       })
     })
-    if(isLegend){
-      setLegendEntry({ name: user.displayName, role: userProfile?.role, photo: user.photoURL })
-      setTimeout(()=> setLegendEntry(null), 4500)
-    } else if(myEntrance !== "none" && ENTRANCES[myEntrance]){
-      setEntranceEntry({ name: user.displayName, photo: user.photoURL, entranceData: ENTRANCES[myEntrance] })
-      setTimeout(()=> setEntranceEntry(null), 3500)
-    }
+    if(isLegend){ setLegendEntry({ name: user.displayName, role: userProfile?.role, photo: user.photoURL }); setTimeout(()=> setLegendEntry(null), 4500) }
+    else if(myEntrance !== "none" && ENTRANCES[myEntrance]){ setEntranceEntry({ name: user.displayName, photo: user.photoURL, entranceData: ENTRANCES[myEntrance] }); setTimeout(()=> setEntranceEntry(null), 3500) }
     setIsJoined(true)
     return ()=>{ deleteDoc(myRef).catch(()=>{}); unsub() }
   },[id,user,userProfile?.role,userProfile?.entrance])
@@ -178,9 +189,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     const seat = seats[num]
     if(seat?.locked) return alert("المقعد مقفل 🔒")
     if(seat?.occupiedBy) return alert("المقعد مشغول")
-    if(AUCTION_SEATS[num]){
-      setShowAuction(num); return
-    }
+    if(AUCTION_SEATS[num]){ setShowAuction(num); return }
     const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
     if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
     await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:userProfile?.avatar || user.photoURL||"", frame: userProfile?.seatFrame || "none", avatarFrame: userProfile?.avatarFrame || "none", nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", decoSuffix: userProfile?.decoSuffix || "", decoId: userProfile?.decoId || "none", entrance: userProfile?.entrance || "none", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
@@ -211,13 +220,29 @@ export default function ChatRoomClient({ id }: { id: string }) {
     setText("")
   }
 
-  const isOwner = room?.ownerUid===user?.uid
-
-  const getAvatarClass = (avatarFrameId:string) => {
-    return AVATAR_FRAMES.find(f=>f.id===avatarFrameId)?.class || "border-transparent"
+  // ✅ وظائف الموسيقى - مالك الغرفة بس
+  const isRoomOwner = room?.ownerUid===user?.uid
+  const playMusic = async (url:string, title:string) => {
+    if(!isRoomOwner) return alert("الموسيقى للمالك بس 👑")
+    const ytId = getYoutubeId(url)
+    const type = ytId ? "youtube" : "mp3"
+    const finalUrl = ytId ? `https://www.youtube.com/embed/${ytId}?autoplay=1` : url
+    await setDoc(doc(db, `chatRooms/${id}/music/current`), { url: finalUrl, rawUrl: url, ytId, type, title: title || "أغنية", isPlaying: true, playedBy: user.uid, playedByName: user.displayName, startedAt: serverTimestamp() })
+    setShowMusicPanel(false)
+    setMusicUrl(""); setMusicTitle("")
+    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:`🎵 المالك شغّل: ${title || url}`, isSystem:true, createdAt:serverTimestamp() })
+  }
+  const togglePlay = async () => {
+    if(!isRoomOwner || !music) return
+    await updateDoc(doc(db, `chatRooms/${id}/music/current`), { isPlaying: !music.isPlaying })
+  }
+  const stopMusic = async () => {
+    if(!isRoomOwner) return
+    await deleteDoc(doc(db, `chatRooms/${id}/music/current`))
   }
 
-  // ✅ كراسي صغيرة - كانت 62px بقت 48px عشان نفضي مساحة للونسة
+  const getAvatarClass = (avatarFrameId:string) => AVATAR_FRAMES.find(f=>f.id===avatarFrameId)?.class || "border-transparent"
+
   const renderSeat = (num:number) => {
     const s=seats[num]; const isMe=s?.occupiedBy===user?.uid; const isAuction = !!AUCTION_SEATS[num]
     const frame = SEAT_FRAMES.find(f=> f.id === s?.frame) || SEAT_FRAMES[0]
@@ -225,18 +250,16 @@ export default function ChatRoomClient({ id }: { id: string }) {
     const isLegendSeat = isOwnerRole(s?.role)
     if(s?.locked) return <div key={num} className="flex flex-col items-center gap-0.5"><div className="w-[46px] h-[46px] rounded-full bg-white/10 flex items-center justify-center text-[15px]">🔒</div><span className="text-[10px] font-bold">{num}</span></div>
     if(s?.occupiedBy) return (
-      <div key={num} onClick={()=> isMe||isOwner?leaveSeat(num):{}} className="flex flex-col items-center gap-0.5 relative cursor-pointer">
+      <div key={num} onClick={()=> isMe||isRoomOwner?leaveSeat(num):{}} className="flex flex-col items-center gap-0.5 relative cursor-pointer">
         {num===1 && <span className="absolute -top-1 -right-1 z-10 text-[8px] bg-yellow-400 text-black rounded-full w-4 h-4 flex items-center justify-center font-black">👑</span>}
         {s.isAuction && <span className="absolute -top-1.5 left-0 z-10 bg-yellow-500 text-black text-[6px] font-black px-1 rounded-full">💰</span>}
         {isLegendSeat && <span className="absolute -top-1 -left-1 z-10 text-[10px]">✨</span>}
         {s.entrance && s.entrance !== "none" && <span className="absolute -top-1.5 -left-1 z-10 text-[10px]">{ENTRANCES[s.entrance]?.icon || "⚡"}</span>}
-        {/* ✅ إطار الصورة + إطار المقعد مع بعض */}
         <div className={`w-[50px] h-[50px] rounded-full p-[2px] ${frame.class} ${isMe ? "ring-2 ring-[#00E676]" : ""} ${isLegendSeat ? "ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.7)]" : ""}`}>
           <div className={`w-full h-full rounded-full overflow-hidden border ${getAvatarClass(s.avatarFrame || "none")}`}>
             <img src={s.photo||`https://i.pravatar.cc/100?u=${s.occupiedBy}`} className="w-full h-full rounded-full object-cover bg-[#1A2E35]" />
           </div>
         </div>
-        {/* ✅ زخرفة الاسم + لون الاسم */}
         <span className={`text-[9px] font-bold truncate max-w-[56px] ${nameColor.class}`}>{s.decoPrefix || ""}{s.name?.slice(0,5)}{s.decoSuffix || ""}{num===1?"👑":""}</span>
         {s.level && <span className="text-[7px] bg-white/10 px-1 py-0 rounded-full font-black">Lv.{s.level} {isOwnerRole(s.role) ? "👑" : ""}</span>}
       </div>
@@ -256,41 +279,20 @@ export default function ChatRoomClient({ id }: { id: string }) {
     <div className="h-[100dvh] flex flex-col text-white relative overflow-hidden">
       <div className="absolute inset-0"><div className="absolute inset-0 bg-gradient-to-b from-[#0F2A2E] via-[#122025] to-[#0B1416]" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#00E676]/10 rounded-full blur-[80px]" /><div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-orange-500/10 rounded-full blur-[90px]" /></div>
 
-      {/* ===== دخول الهيبة - المالك ===== */}
       {legendEntry && (
         <div className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
           <div className="absolute inset-0 bg-gradient-to-br from-[#00E676]/30 via-yellow-400/20 to-transparent animate-pulse" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,230,118,0.3),transparent_70%)]" />
-          <div className="absolute inset-0 overflow-hidden">
-            {[...Array(18)].map((_,i)=>(
-              <div key={i} className="absolute text-[22px] animate-[flyUp_3s_ease-out_forwards]" style={{ left: `${(i*53)%100}%`, top: `${60 + (i%3)*15}%` }}>{["⭐","🔥","💚","❤️","👑","✨"][i%6]}</div>
-            ))}
-          </div>
-          <div className="relative text-center animate-[scaleUp_0.5s_ease-out]">
-            <div className="text-[70px] animate-bounce">👑</div>
-            <h1 className="text-[28px] font-black bg-gradient-to-r from-yellow-300 via-green-400 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(0,230,118,0.8)]">{legendEntry.name}</h1>
-            <p className="text-[18px] font-black text-white mt-1 drop-shadow">ملك المنصة دخل الغرفة... الشاشة ولعت 🔥</p>
-            <p className="text-[13px] text-white/80 mt-2">🇸🇩 هيبة وحضور • مالك الموقع</p>
-          </div>
+          <div className="absolute inset-0 overflow-hidden">{[...Array(18)].map((_,i)=>(<div key={i} className="absolute text-[22px] animate-[flyUp_3s_ease-out_forwards]" style={{ left: `${(i*53)%100}%`, top: `${60 + (i%3)*15}%` }}>{["⭐","🔥","💚","❤️","👑","✨"][i%6]}</div>))}</div>
+          <div className="relative text-center animate-[scaleUp_0.5s_ease-out]"><div className="text-[70px] animate-bounce">👑</div><h1 className="text-[28px] font-black bg-gradient-to-r from-yellow-300 via-green-400 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(0,230,118,0.8)]">{legendEntry.name}</h1><p className="text-[18px] font-black text-white mt-1 drop-shadow">ملك المنصة دخل الغرفة... الشاشة ولعت 🔥</p><p className="text-[13px] text-white/80 mt-2">🇸🇩 هيبة وحضور • مالك الموقع</p></div>
           <style>{`@keyframes scaleUp{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}`}</style>
         </div>
       )}
-
-      {/* ===== دخول مميز - مشترى بالكوينز ⚡ ===== */}
       {entranceEntry && !legendEntry && (
         <div className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
           <div className={`absolute inset-0 bg-gradient-to-br ${entranceEntry.entranceData.bg} animate-pulse`} />
-          <div className="absolute inset-0 overflow-hidden">
-            {entranceEntry.entranceData.emojis.map((e:string,i:number)=>(
-              <div key={i} className="absolute text-[26px] animate-[flyUp_3s_ease-out_forwards]" style={{ left: `${(i*47)%100}%`, top: `${60 + (i%3)*15}%` }}>{e}</div>
-            ))}
-          </div>
-          <div className="relative text-center animate-[scaleUp_0.5s_ease-out]">
-            <div className="text-[70px] animate-bounce">{entranceEntry.entranceData.icon}</div>
-            <h1 className="text-[26px] font-black text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">{entranceEntry.name}</h1>
-            <p className="text-[16px] font-black text-white mt-1 drop-shadow">{entranceEntry.entranceData.text}</p>
-            <p className="text-[12px] text-white/80 mt-2">✨ {entranceEntry.entranceData.label}</p>
-          </div>
+          <div className="absolute inset-0 overflow-hidden">{entranceEntry.entranceData.emojis.map((e:string,i:number)=>(<div key={i} className="absolute text-[26px] animate-[flyUp_3s_ease-out_forwards]" style={{ left: `${(i*47)%100}%`, top: `${60 + (i%3)*15}%` }}>{e}</div>))}</div>
+          <div className="relative text-center animate-[scaleUp_0.5s_ease-out]"><div className="text-[70px] animate-bounce">{entranceEntry.entranceData.icon}</div><h1 className="text-[26px] font-black text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">{entranceEntry.name}</h1><p className="text-[16px] font-black text-white mt-1 drop-shadow">{entranceEntry.entranceData.text}</p><p className="text-[12px] text-white/80 mt-2">✨ {entranceEntry.entranceData.label}</p></div>
           <style>{`@keyframes scaleUp{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}`}</style>
         </div>
       )}
@@ -300,20 +302,48 @@ export default function ChatRoomClient({ id }: { id: string }) {
         <style>{`@keyframes flyUp { 0%{ transform: translateY(0) scale(0.5); opacity:0 } 20%{ opacity:1 } 100%{ transform: translateY(-400px) scale(1.4); opacity:0 } }`}</style>
       </div>
 
-      {/* هيدر - ✅ الشنطة محذوفة */}
       <div className="relative z-10 bg-black/20 backdrop-blur p-3 flex items-center justify-between border-b border-white/5 shrink-0">
         <div className="flex items-center gap-2"><Link href="/chat-rooms" className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">✕</Link><button className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">↗️</button></div>
         <div className="flex items-center gap-2 flex-1 justify-center">
           <button onClick={()=>!isJoined&&setIsJoined(true)} className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${isJoined?"bg-white/20":"bg-[#00E676] text-black"}`}>+</button>
           <div className="text-center"><h2 className="font-black text-[14px] truncate max-w-[160px]">{room.decoratedName||room.name}</h2><p className="text-[10px] text-white/60">{joinedCount} الأعضاء • 🟢 {onlineCount} • 💰 {myCoins}</p></div>
         </div>
-        <div className="flex items-center gap-1.5"><div className="bg-white/10 px-2.5 py-1 rounded-full text-[11px]">🏆 الترتيب</div></div>
+        <div className="flex items-center gap-1.5">
+          {/* ✅ زر الموسيقى - مالك بس */}
+          {isRoomOwner && <button onClick={()=>setShowMusicPanel(true)} className={`w-8 h-8 rounded-full flex items-center justify-center text-[14px] ${music?.isPlaying ? "bg-[#00E676] text-black animate-pulse" : "bg-white/10"}`}>🎵</button>}
+          <div className="bg-white/10 px-2.5 py-1 rounded-full text-[11px]">🏆</div>
+        </div>
       </div>
 
-      {/* ✅ كراسي - صغيرة ومضغوطة */}
       <div className="relative z-10 p-2.5 px-3 shrink-0"><div className="grid grid-cols-4 gap-y-2.5 gap-x-2">{[1,2,3,4,5,6,7,8,9,10,11,12].map(renderSeat)}</div></div>
 
-      {/* ✅ مساحة إعلان - بين الكراسي والونسة */}
+      {/* ✅ مشغل الموسيقى - يظهر لكل الناس */}
+      {music && (
+        <div className="relative z-10 mx-3 mb-2 shrink-0">
+          <div className="bg-gradient-to-r from-violet-900/80 to-[#122025] border border-violet-500/30 rounded-[16px] overflow-hidden">
+            <div className="flex items-center gap-3 p-2.5">
+              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-[18px] shrink-0 ${music.isPlaying ? "animate-spin" : ""}`} style={{animationDuration: "3s"}}>🎵</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-black truncate flex items-center gap-1">{music.isPlaying ? "🔊" : "⏸️"} {music.title} {music.isPlaying && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />}</p>
+                <p className="text-[10px] text-white/50 truncate">شغّلها المالك {music.playedByName || ""} • للكل</p>
+              </div>
+              {isRoomOwner ? (
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={togglePlay} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-[14px]">{music.isPlaying ? "⏸️" : "▶️"}</button>
+                  <button onClick={stopMusic} className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center text-[12px]">⏹️</button>
+                </div>
+              ) : (
+                <span className="text-[10px] bg-white/10 px-2 py-1 rounded-full">🎧 الكل بيسمع</span>
+              )}
+            </div>
+            {music.type === "youtube" && music.isPlaying && (
+              <iframe src={music.url} className="w-full h-0 opacity-0 pointer-events-none" allow="autoplay" />
+            )}
+            <div className="h-[3px] bg-white/10"><div className={`h-full bg-violet-500 ${music.isPlaying ? "animate-pulse w-full" : "w-0"}`} /></div>
+          </div>
+        </div>
+      )}
+
       {showAd && (
         <div className="relative z-10 mx-3 mb-2 shrink-0">
           <div className="bg-gradient-to-r from-[#1A2E35] to-[#122025] border border-white/10 rounded-[16px] overflow-hidden">
@@ -331,15 +361,12 @@ export default function ChatRoomClient({ id }: { id: string }) {
         </div>
       )}
 
-      {/* ✅ بطاقة المتجر - نفس ستايل بطاقة الشحن */}
       <StoreBanner />
 
-      {/* أزرار التفاعل - صغيرة */}
       <div className="relative z-10 flex justify-center gap-2 mb-1.5 shrink-0">
         {["🔥","❤️","🎉","👏","🇸🇩"].map(e=> <button key={e} onClick={()=>sendReaction(e)} className="w-8 h-8 bg-white/10 rounded-full text-[16px] hover:bg-white/20 active:scale-125 transition">{e}</button>)}
       </div>
 
-      {/* ✅ منطقة النصوص - بقت أكبر وأوسع */}
       <div className="relative z-10 mx-3 bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-2.5 text-[11px] text-white/70 text-center shrink-0">💬 ممنوع الإساءة - خليك محترم • استمتع بالونسة السودانية 🇸🇩</div>
 
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-auto p-3 space-y-2 mt-2 min-h-0">
@@ -354,7 +381,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
         ))}
       </div>
 
-      {/* إدخال الرسالة */}
       <div className="relative z-10 bg-black/40 backdrop-blur border-t border-white/10 p-2.5 flex items-center gap-2 shrink-0">
         <button className="w-10 h-10 shrink-0 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center text-[18px]">🎁</button>
         <button className="w-10 h-10 shrink-0 bg-white/10 rounded-full flex items-center justify-center text-[18px]">🌹</button>
@@ -366,11 +392,57 @@ export default function ChatRoomClient({ id }: { id: string }) {
         <button onClick={sendMessage} className="w-10 h-10 shrink-0 bg-[#00E676] rounded-full flex items-center justify-center text-black font-black">➤</button>
       </div>
 
+      {/* ✅ لوحة تحكم الموسيقى - للمالك بس */}
+      {showMusicPanel && (
+        <div className="fixed inset-0 bg-black/70 z-[150] flex items-end justify-center p-4" onClick={()=>setShowMusicPanel(false)}>
+          <div onClick={e=>e.stopPropagation()} className="bg-[#122025] rounded-[24px] p-5 w-full max-w-[400px] border border-white/10 max-h-[80vh] overflow-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-black text-[16px]">🎵 تشغيل الموسيقى - المالك بس</h3>
+              <button onClick={()=>setShowMusicPanel(false)} className="w-8 h-8 bg-white/10 rounded-full">✕</button>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-[12px] text-white/60 font-bold">رابط يوتيوب أو رابط MP3 مباشر</label>
+                <input value={musicUrl} onChange={e=>setMusicUrl(e.target.value)} placeholder="https://youtube.com/watch?v=... أو رابط mp3" className="w-full mt-1 bg-white/10 rounded-xl px-4 py-3 text-[13px] outline-none border border-transparent focus:border-violet-500/50" />
+              </div>
+              <div>
+                <label className="text-[12px] text-white/60 font-bold">اسم الأغنية</label>
+                <input value={musicTitle} onChange={e=>setMusicTitle(e.target.value)} placeholder="مثال: ود الباشا - حلوة" className="w-full mt-1 bg-white/10 rounded-xl px-4 py-3 text-[13px] outline-none border border-transparent focus:border-violet-500/50" />
+              </div>
+              <button onClick={()=>{ if(!musicUrl) return alert("حط رابط"); playMusic(musicUrl, musicTitle) }} className="w-full bg-[#00E676] text-black font-black py-3.5 rounded-full text-[14px]">▶️ شغّل للكل في الغرفة</button>
+              
+              <div className="pt-3 border-t border-white/10">
+                <p className="text-[12px] font-black mb-2">🎧 أغاني مقترحة (تجريبية)</p>
+                {SUGGESTED_SONGS.map((s,i)=>(
+                  <div key={i} className="flex items-center gap-3 bg-white/5 rounded-xl p-3 mb-2">
+                    <div className="w-10 h-10 bg-violet-500/20 rounded-full flex items-center justify-center">🎵</div>
+                    <div className="flex-1"><p className="text-[13px] font-bold">{s.title}</p><p className="text-[10px] text-white/40 truncate">{s.url.slice(0,30)}...</p></div>
+                    <button onClick={()=>playMusic(s.url, s.title)} className="bg-white text-black px-3 py-1.5 rounded-full text-[11px] font-black">شغل</button>
+                  </div>
+                ))}
+                <p className="text-[11px] text-white/40 text-center mt-3">💡 تقدر تجيب رابط MP3 مباشر من أي موقع أو تستخدم رابط يوتيوب، الكل حيسمع مع بعض</p>
+              </div>
+
+              {music && (
+                <div className="flex gap-2 pt-2">
+                  <button onClick={togglePlay} className="flex-1 bg-white/10 py-3 rounded-full font-black text-[13px]">{music.isPlaying ? "⏸️ وقّف" : "▶️ كمّل"}</button>
+                  <button onClick={stopMusic} className="flex-1 bg-red-500/20 text-red-400 py-3 rounded-full font-black text-[13px]">⏹️ إيقاف نهائي</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* عنصر الصوت المخفي */}
+      <audio ref={audioRef} loop className="hidden" />
+
       {showAuction && (
         <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-6" onClick={()=>setShowAuction(null)}>
           <div onClick={e=>e.stopPropagation()} className="bg-[#122025] rounded-[24px] p-6 w-full max-w-[320px] text-center border border-yellow-400/30">
             <div className="text-[50px]">💰</div><h3 className="font-black text-[18px] mt-2">مزاد مقعد {showAuction}</h3>
-            <p className="text-[13px] text-white/60 mt-1">مقعد VIP - السعر {AUCTION_SEATS[showAuction]} كوينز<br/>كوينزك: {myCoins} • الفلوس بتمشي لصاحب الغرفة</p>
+            <p className="text-[13px] text-white/60 mt-1">مقعد VIP - السعر {AUCTION_SEATS[showAuction]} كوينز<br/>كوينزك: {myCoins} • الكوينز بتمشي لصاحب الغرفة</p>
             <button onClick={()=>buyAuctionSeat(showAuction)} className="w-full mt-4 bg-yellow-500 text-black font-black py-3.5 rounded-full">اشتري الآن - {AUCTION_SEATS[showAuction]} 💰</button>
             <button onClick={()=>setShowAuction(null)} className="w-full mt-2 bg-white/10 py-3 rounded-full font-bold">إلغاء</button>
           </div>
