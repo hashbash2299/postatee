@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { db, auth } from "@/lib/firebase"
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore"
+import { collection, onSnapshot } from "firebase/firestore"
 import Link from "next/link"
 import { onAuthStateChanged } from "firebase/auth"
 
@@ -27,9 +27,10 @@ export default function ChatRoomsPage() {
   })
   if (filter === "غرفي" && !user) displayed = []
 
+  const myRoomsCount = rooms.filter(isMyRoom).length
+
   return (
     <div className="min-h-screen text-white relative">
-      {/* الخلفية الحيوية - رقم 2 */}
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-[url('/bg-chat.jpg')] bg-cover bg-center" />
         <div className="absolute inset-0 bg-[#0B1416]/75 backdrop-blur-[1px]" />
@@ -38,13 +39,21 @@ export default function ChatRoomsPage() {
 
       <div className="relative z-10 p-4 max-w-[600px] mx-auto">
         <div className="flex justify-between items-center mb-4">
-          <Link href="/chat-rooms/create" className="bg-[#00E676] text-black font-black px-5 py-2.5 rounded-full text-[14px] shadow-lg shadow-green-500/20">+ غرفتي</Link>
+          {/* ✅ تم التعديل: زر غرفي بيفتح صفحة غرفك (فلتر) ما بيوديك للإنشاء */}
+          <button onClick={() => setFilter("غرفي")} className="bg-[#00E676] text-black font-black px-5 py-2.5 rounded-full text-[14px] shadow-lg shadow-green-500/20">
+            👑 غرفي {myRoomsCount > 0 ? `(${myRoomsCount})` : ""}
+          </button>
           <div className="text-center">
             <h1 className="font-black text-[18px] drop-shadow">🇸🇩 غرف الدردشة</h1>
             <p className="text-[11px] text-white/60">v2.0 • {rooms.length} غرفة</p>
           </div>
           <Link href="/" className="w-10 h-10 bg-white/10 backdrop-blur rounded-full flex items-center justify-center border border-white/10">←</Link>
         </div>
+
+        {/* ✅ زر إضافة غرفة جديدة - برة، بيفتح إنشاء غرفة تانية طوالي */}
+        <Link href="/chat-rooms/create" className="w-full mb-4 bg-white text-black font-black py-3 rounded-full text-[14px] flex items-center justify-center gap-2 shadow-lg">
+          + إنشاء غرفة جديدة
+        </Link>
 
         <div className="relative mb-4">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 ابحث عن غرفة..." className="w-full bg-[#122025]/80 backdrop-blur border border-white/10 rounded-full px-4 py-3.5 text-[14px] outline-none focus:border-[#00E676]/50" />
@@ -61,7 +70,8 @@ export default function ChatRoomsPage() {
         {displayed.length === 0 ? (
           <div className="text-center py-16 bg-[#122025]/60 backdrop-blur rounded-[24px] border border-white/10">
             <div className="text-[50px]">🏠</div>
-            <p className="font-black mt-2">ما في غرف هنا</p>
+            <p className="font-black mt-2">{filter === "غرفي" ? "لسه ما عندك غرف" : "ما في غرف هنا"}</p>
+            <p className="text-[12px] text-white/50 mt-1">{filter === "غرفي" ? "اعمل غرفتك الأولى هسه" : ""}</p>
             <Link href="/chat-rooms/create" className="mt-4 inline-block bg-[#00E676] text-black font-black px-6 py-3 rounded-full">+ إنشاء غرفة جديدة</Link>
           </div>
         ) : (

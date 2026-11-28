@@ -7,7 +7,7 @@ import Link from "next/link"
 
 const TOTAL_SEATS = 12
 const EMOJIS = ["❤️","😂","😍","🔥","👏","🇸🇩","💚","😭"]
-const AUCTION_SEATS: Record<number, number> = { 2: 500, 3: 300 } // مزاد
+const AUCTION_SEATS: Record<number, number> = { 2: 500, 3: 300 }
 
 export default function ChatRoomClient({ id }: { id: string }) {
   const [room, setRoom] = useState<any>(null)
@@ -26,17 +26,13 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
   useEffect(()=>{ return onAuthStateChanged(auth, setUser) },[])
 
-  // ✅ التعديل 1: كان بيقرا من customRooms بس - هسه بيقرا من الاتنين
   useEffect(()=>{
     if(!id) return
     const load = async () => {
-      // جرب customRooms أول
       let snap = await getDoc(doc(db, "customRooms", id))
       if(snap.exists()){ setRoom({id: snap.id, ...snap.data()}); return }
-      // لو ما لقاها جرب chatRooms - دي غرفة مملكة القلوب
       snap = await getDoc(doc(db, "chatRooms", id))
       if(snap.exists()){ setRoom({id: snap.id, ...snap.data()}); return }
-      // لو لسه ما لقاها - اعمل غرفة افتراضية عشان ما تدي 404
       setRoom({ id, name: "مملكة القلوب", decoratedName: "مملكة القلوب ❤️", ownerUid: user?.uid })
     }
     load()
@@ -72,7 +68,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
     })
   },[id])
 
-  // 🔥 تفاعل طائر
   const sendReaction = (emoji:string) => {
     const idR = Date.now() + Math.random()
     const left = 20 + Math.random()*60
@@ -81,7 +76,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
     addDoc(collection(db, `chatRooms/${id}/reactions`), { emoji, uid: user?.uid, createdAt: serverTimestamp() })
   }
 
-  // استقبال تفاعلات الناس
   useEffect(()=>{
     if(!id) return
     const q = query(collection(db, `chatRooms/${id}/reactions`), orderBy("createdAt","desc"))
@@ -111,7 +105,6 @@ export default function ChatRoomClient({ id }: { id: string }) {
     await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:user.photoURL||"", joinedAt:serverTimestamp() })
   }
 
-  // 💰 شراء مزاد
   const buyAuctionSeat = async (num:number) => {
     const price = AUCTION_SEATS[num]
     if(myCoins < price) return alert(`كوينزك ${myCoins} ما كافية! تحتاج ${price}`)
@@ -192,10 +185,16 @@ export default function ChatRoomClient({ id }: { id: string }) {
         ))}
       </div>
 
+      {/* ✅ تم التعديل: حقل الدردشة مصغر - الأيقونات رجعت مدورة */}
       <div className="relative z-10 bg-black/40 backdrop-blur border-t border-white/10 p-2.5 flex items-center gap-2">
-        <button className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full">🎁</button><button className="w-10 h-10 bg-white/10 rounded-full">🌹</button><button className="w-10 h-10 bg-white/10 rounded-full">⊞</button>
-        <div className="flex-1 bg-white/10 rounded-full flex items-center px-3"><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} placeholder="قول حاجة..." className="flex-1 bg-transparent py-2.5 text-[14px] outline-none" /><button onClick={()=>setShowEmoji(!showEmoji)} className="text-[20px]">😊</button></div>
-        <button className="w-10 h-10 bg-white/10 rounded-full">🎙️</button>
+        <button className="w-10 h-10 shrink-0 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center text-[18px]">🎁</button>
+        <button className="w-10 h-10 shrink-0 bg-white/10 rounded-full flex items-center justify-center text-[18px]">🌹</button>
+        <div className="flex-1 min-w-0 bg-white/10 rounded-full flex items-center px-3">
+          <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} placeholder="قول حاجة..." className="flex-1 min-w-0 bg-transparent py-2.5 text-[14px] outline-none" />
+          <button onClick={()=>setShowEmoji(!showEmoji)} className="text-[20px] shrink-0 ml-1">😊</button>
+        </div>
+        <button className="w-10 h-10 shrink-0 bg-white/10 rounded-full flex items-center justify-center text-[18px]">🎙️</button>
+        <button onClick={sendMessage} className="w-10 h-10 shrink-0 bg-[#00E676] rounded-full flex items-center justify-center text-black font-black">➤</button>
       </div>
 
       {showAuction && (
