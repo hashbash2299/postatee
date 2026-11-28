@@ -5,6 +5,7 @@ import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, addDoc, serverT
 import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
 import StoreBanner from "./StoreBanner"
+import MusicPlayer from "./MusicPlayer"
 
 const isOwnerRole = (role: any) => role === "owner" || role === "مالك"
 
@@ -256,6 +257,10 @@ export default function ChatRoomClient({ id }: { id: string }) {
       </div>
 
       <div className="relative z-10 p-2.5 px-3 shrink-0"><div className="grid grid-cols-4 gap-y-2.5 gap-x-2">{[1,2,3,4,5,6,7,8,9,10,11,12].map(renderSeat)}</div></div>
+
+{/* ✅ مشغل الموسيقى */}
+<MusicPlayer id={id} user={user} isRoomOwner={isRoomOwner} />
+
 
       {showAd && (
         <div className="relative z-10 mx-3 mb-2 shrink-0">
