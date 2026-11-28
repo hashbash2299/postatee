@@ -5,6 +5,22 @@ import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, addDoc, serverT
 import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
 
+// ===== زخرفة المقاعد والأسماء =====
+const SEAT_FRAMES = [
+  { id: "none", label: "عادي", class: "bg-white/20", price: 0 },
+  { id: "gold", label: "👑 ذهبي", class: "bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-[0_0_15px_rgba(234,179,8,0.5)]", price: 500 },
+  { id: "fire", label: "🔥 ناري", class: "bg-gradient-to-br from-orange-500 to-red-600 shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse", price: 800 },
+  { id: "ice", label: "❄️ ثلجي", class: "bg-gradient-to-br from-cyan-300 to-blue-500 shadow-[0_0_15px_rgba(6,182,212,0.6)]", price: 800 },
+  { id: "rainbow", label: "🌈 قوس قزح", class: "bg-gradient-to-br from-pink-500 via-yellow-500 to-green-500 shadow-[0_0_20px_rgba(236,72,153,0.6)]", price: 1500 },
+  { id: "diamond", label: "💎 ماسي", class: "bg-gradient-to-br from-white via-cyan-200 to-white shadow-[0_0_20px_rgba(255,255,255,0.8)]", price: 2000 },
+]
+const NAME_COLORS = [
+  { id: "white", label: "أبيض", class: "text-white", price: 0 },
+  { id: "gold", label: "ذهبي", class: "text-yellow-400 font-black", price: 300 },
+  { id: "green", label: "أخضر نيون", class: "text-[#00E676] font-black", price: 300 },
+  { id: "rainbow", label: "قوس قزح", class: "bg-gradient-to-r from-pink-500 via-yellow-400 to-cyan-400 bg-clip-text text-transparent font-black", price: 1000 },
+]
+
 const TOTAL_SEATS = 12
 const EMOJIS = ["❤️","😂","😍","🔥","👏","🇸🇩","💚","😭"]
 const AUCTION_SEATS: Record<number, number> = { 2: 500, 3: 300 }
@@ -12,6 +28,7 @@ const AUCTION_SEATS: Record<number, number> = { 2: 500, 3: 300 }
 export default function ChatRoomClient({ id }: { id: string }) {
   const [room, setRoom] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
+  const [userProfile, setUserProfile] = useState<any>(null)
   const [seats, setSeats] = useState<Record<number, any>>({})
   const [messages, setMessages] = useState<any[]>([])
   const [onlineCount, setOnlineCount] = useState(0)
@@ -22,6 +39,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
   const [myCoins, setMyCoins] = useState(1000)
   const [flying, setFlying] = useState<{id:number, emoji:string, left:number}[]>([])
   const [showAuction, setShowAuction] = useState<number | null>(null)
+  const [legendEntry, setLegendEntry] = useState<any>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(()=>{ return onAuthStateChanged(auth, setUser) },[])
@@ -40,7 +58,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
   useEffect(()=>{
     if(!user) return
-    getDoc(doc(db,"users",user.uid)).then(s=>{ if(s.exists()) setMyCoins(s.data().coins ?? 1000) })
+    getDoc(doc(db,"users",user.uid)).then(s=>{ if(s.exists()){ setMyCoins(s.data().coins ?? 1000); setUserProfile(s.data()) } })
   },[user])
 
   useEffect(()=>{
@@ -50,14 +68,31 @@ export default function ChatRoomClient({ id }: { id: string }) {
     })
   },[id])
 
+  // ===== دخول الهيبة - owner بس 🔥 =====
   useEffect(()=>{
     if(!id || !user) return
+    const isLegend = userProfile?.role === "owner"
     const myRef = doc(db, `chatRooms/${id}/online/${user.uid}`)
-    setDoc(myRef, { uid:user.uid, joinedAt:serverTimestamp(), name:user.displayName }, { merge:true })
-    const unsub = onSnapshot(collection(db, `chatRooms/${id}/online`), s=>{ setOnlineCount(s.size); setJoinedCount(s.size) })
+    setDoc(myRef, { uid:user.uid, joinedAt:serverTimestamp(), name:user.displayName, photo:user.photoURL, role: userProfile?.role || "member", isLegend }, { merge:true })
+    const unsub = onSnapshot(collection(db, `chatRooms/${id}/online`), s=>{
+      setOnlineCount(s.size); setJoinedCount(s.size)
+      s.docChanges().forEach(change=>{
+        if(change.type === "added" && change.doc.id !== user.uid){
+          const d = change.doc.data()
+          if(d.isLegend){
+            setLegendEntry(d)
+            setTimeout(()=> setLegendEntry(null), 4500)
+          }
+        }
+      })
+    })
+    if(isLegend){
+      setLegendEntry({ name: user.displayName, role: "owner", photo: user.photoURL })
+      setTimeout(()=> setLegendEntry(null), 4500)
+    }
     setIsJoined(true)
     return ()=>{ deleteDoc(myRef).catch(()=>{}); unsub() }
-  },[id,user])
+  },[id,user,userProfile?.role])
 
   useEffect(()=>{
     if(!id) return
@@ -102,7 +137,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     }
     const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
     if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
-    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:user.photoURL||"", joinedAt:serverTimestamp() })
+    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:user.photoURL||"", frame: userProfile?.seatFrame || "none", nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", level: userProfile?.level || 1, role: userProfile?.role || "member", joinedAt:serverTimestamp() })
   }
 
   const buyAuctionSeat = async (num:number) => {
@@ -113,7 +148,7 @@ export default function ChatRoomClient({ id }: { id: string }) {
     if(room?.ownerUid) await updateDoc(doc(db,"users",room.ownerUid), { coins: increment(price) }).catch(()=>{})
     const myOld = Object.entries(seats).find(([_,v]:any)=> v.occupiedBy===user.uid)
     if(myOld) await deleteDoc(doc(db, `chatRooms/${id}/seats/${myOld[0]}`))
-    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:user.photoURL||"", isAuction:true, price, joinedAt:serverTimestamp() })
+    await setDoc(doc(db, `chatRooms/${id}/seats/${num}`), { occupiedBy:user.uid, name:user.displayName||"سوداني", photo:user.photoURL||"", isAuction:true, price, frame: userProfile?.seatFrame || "gold", nameColor: userProfile?.nameColor || "gold", decoPrefix: userProfile?.decoPrefix || "", level: userProfile?.level || 1, joinedAt:serverTimestamp() })
     await addDoc(collection(db, `chatRooms/${id}/messages`), { text:`💰 ${user.displayName} اشترى مقعد ${num} بـ ${price} كوينز`, isSystem:true, createdAt:serverTimestamp() })
     setShowAuction(null)
   }
@@ -126,26 +161,31 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
   const sendMessage = async () => {
     if(!text.trim()||!user) return
-    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:text.trim(), uid:user.uid, displayName:user.displayName||"سوداني", photo:user.photoURL, createdAt:serverTimestamp() })
+    await addDoc(collection(db, `chatRooms/${id}/messages`), { text:text.trim(), uid:user.uid, displayName:user.displayName||"سوداني", photo:user.photoURL, nameColor: userProfile?.nameColor || "white", decoPrefix: userProfile?.decoPrefix || "", role: userProfile?.role || "member", createdAt:serverTimestamp() })
     setText("")
   }
 
   const isOwner = room?.ownerUid===user?.uid
   const renderSeat = (num:number) => {
     const s=seats[num]; const isMe=s?.occupiedBy===user?.uid; const isAuction = !!AUCTION_SEATS[num]
+    const frame = SEAT_FRAMES.find(f=> f.id === s?.frame) || SEAT_FRAMES[0]
+    const nameColor = NAME_COLORS.find(c=> c.id === s?.nameColor) || NAME_COLORS[0]
+    const isLegendSeat = s?.role === "owner"
     if(s?.locked) return <div key={num} className="flex flex-col items-center gap-1"><div className="w-[62px] h-[62px] rounded-full bg-white/10 flex items-center justify-center">🔒</div><span className="text-[12px] font-bold">{num}</span></div>
     if(s?.occupiedBy) return (
       <div key={num} onClick={()=> isMe||isOwner?leaveSeat(num):{}} className="flex flex-col items-center gap-1 relative cursor-pointer">
-        {num===1 && <span className="absolute -top-1 -right-1 z-10 text-[10px] bg-yellow-400 text-black rounded-full w-4 h-4 flex items-center justify-center font-black">👑</span>}
-        {s.isAuction && <span className="absolute -top-2 left-0 z-10 bg-yellow-500 text-black text-[8px] font-black px-1 rounded-full">💰 VIP</span>}
-        <div className={`w-[62px] h-[62px] rounded-full p-[2px] ${isMe?"bg-[#00E676]":"bg-white/20"}`}><img src={s.photo||`https://i.pravatar.cc/100?u=${s.occupiedBy}`} className="w-full h-full rounded-full object-cover bg-[#1A2E35]" /></div>
-        <span className="text-[12px] font-bold truncate max-w-[60px]">{s.name?.slice(0,6)}{num===1?" 👑":""}</span>
+        {num===1 && <span className="absolute -top-1 -right-1 z-10 text-[10px] bg-yellow-400 text-black rounded-full w-5 h-5 flex items-center justify-center font-black animate-bounce">👑</span>}
+        {s.isAuction && <span className="absolute -top-2 left-0 z-10 bg-yellow-500 text-black text-[8px] font-black px-1.5 rounded-full">💰 VIP</span>}
+        {isLegendSeat && <span className="absolute -top-2 -left-1 z-10 text-[12px] animate-pulse">✨</span>}
+        <div className={`w-[68px] h-[68px] rounded-full p-[3px] ${frame.class} ${isMe ? "ring-2 ring-[#00E676]" : ""} ${isLegendSeat ? "ring-2 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.7)]" : ""}`}><img src={s.photo||`https://i.pravatar.cc/100?u=${s.occupiedBy}`} className="w-full h-full rounded-full object-cover bg-[#1A2E35] border-2 border-[#0B1416]" /></div>
+        <span className={`text-[11px] font-bold truncate max-w-[70px] ${nameColor.class}`}>{s.decoPrefix || ""} {s.name?.slice(0,6)} {num===1?"👑":""}</span>
+        {s.level && <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded-full font-black">Lv.{s.level} {s.role==="owner" ? "👑" : ""}</span>}
       </div>
     )
     return (
       <div key={num} onClick={()=>takeSeat(num)} className="flex flex-col items-center gap-1 cursor-pointer relative">
-        {isAuction && <span className="absolute -top-2 z-10 bg-yellow-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded-full">💰 {AUCTION_SEATS[num]}</span>}
-        <div className={`w-[62px] h-[62px] rounded-full bg-white/5 border-2 border-dashed flex items-center justify-center ${isAuction?"border-yellow-400/50":"border-white/15"}`}><span className="text-white/40 text-[20px]">🪑</span></div>
+        {isAuction && <span className="absolute -top-2 z-10 bg-yellow-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">💰 {AUCTION_SEATS[num]}</span>}
+        <div className={`w-[62px] h-[62px] rounded-full bg-white/5 border-2 border-dashed flex items-center justify-center ${isAuction?"border-yellow-400/50":"border-white/15"} hover:border-[#00E676]/50 transition`}><span className="text-white/40 text-[20px]">🪑</span></div>
         <span className="text-[12px] font-bold text-white/60">{num===1?"المالك":num}</span>
       </div>
     )
@@ -156,6 +196,26 @@ export default function ChatRoomClient({ id }: { id: string }) {
   return (
     <div className="h-[100dvh] flex flex-col text-white relative overflow-hidden">
       <div className="absolute inset-0"><div className="absolute inset-0 bg-gradient-to-b from-[#0F2A2E] via-[#122025] to-[#0B1416]" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#00E676]/10 rounded-full blur-[80px]" /><div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-orange-500/10 rounded-full blur-[90px]" /></div>
+
+      {/* ===== دخول الهيبة - الشاشة تولع ===== */}
+      {legendEntry && (
+        <div className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#00E676]/30 via-yellow-400/20 to-transparent animate-pulse" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,230,118,0.3),transparent_70%)]" />
+          <div className="absolute inset-0 overflow-hidden">
+            {[...Array(18)].map((_,i)=>(
+              <div key={i} className="absolute text-[22px] animate-[flyUp_3s_ease-out_forwards]" style={{ left: `${(i*53)%100}%`, top: `${60 + (i%3)*15}%` }}>{["⭐","🔥","💚","❤️","👑","✨"][i%6]}</div>
+            ))}
+          </div>
+          <div className="relative text-center animate-[scaleUp_0.5s_ease-out]">
+            <div className="text-[70px] animate-bounce">👑</div>
+            <h1 className="text-[28px] font-black bg-gradient-to-r from-yellow-300 via-green-400 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(0,230,118,0.8)]">{legendEntry.name}</h1>
+            <p className="text-[18px] font-black text-white mt-1 drop-shadow">ملك المنصة دخل الغرفة... الشاشة ولعت 🔥</p>
+            <p className="text-[13px] text-white/80 mt-2">🇸🇩 هيبة وحضور • مالك الموقع</p>
+          </div>
+          <style>{`@keyframes scaleUp{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}`}</style>
+        </div>
+      )}
 
       <div className="absolute inset-0 pointer-events-none z-[50] overflow-hidden">
         {flying.map(f=> <div key={f.id} className="absolute bottom-[180px] text-[38px] animate-[flyUp_2.5s_ease-out_forwards]" style={{ left: `${f.left}%` }}>{f.emoji}</div>)}
@@ -181,11 +241,10 @@ export default function ChatRoomClient({ id }: { id: string }) {
 
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-auto p-3 space-y-2 mt-2">
         {messages.slice(-30).map(m=> m.isSystem ? <div key={m.id} className="flex items-center gap-2 text-[12px] text-white/60 bg-white/5 w-fit px-3 py-1.5 rounded-full"><span>👋</span><p>{m.text}</p></div> : (
-          <div key={m.id} className="flex gap-2"><img src={m.photo||`https://i.pravatar.cc/100?u=${m.uid}`} className="w-7 h-7 rounded-full" /><div className="bg-white/10 rounded-2xl px-3 py-1.5 max-w-[75%]"><span className="text-[11px] font-black text-[#00E676]">{m.displayName}:</span><span className="text-[13px] ml-1">{m.text}</span></div></div>
+          <div key={m.id} className="flex gap-2"><img src={m.photo||`https://i.pravatar.cc/100?u=${m.uid}`} className="w-7 h-7 rounded-full" /><div className="bg-white/10 rounded-2xl px-3 py-1.5 max-w-[75%]"><span className={`text-[11px] font-black ${m.role==="owner" ? "text-yellow-400" : "text-[#00E676]"}`}>{m.decoPrefix || ""} {m.displayName}{m.role==="owner" ? " 👑" : ""}:</span><span className="text-[13px] ml-1">{m.text}</span></div></div>
         ))}
       </div>
 
-      {/* ✅ تم التعديل: حقل الدردشة مصغر - الأيقونات رجعت مدورة */}
       <div className="relative z-10 bg-black/40 backdrop-blur border-t border-white/10 p-2.5 flex items-center gap-2">
         <button className="w-10 h-10 shrink-0 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center text-[18px]">🎁</button>
         <button className="w-10 h-10 shrink-0 bg-white/10 rounded-full flex items-center justify-center text-[18px]">🌹</button>

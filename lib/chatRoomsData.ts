@@ -1,4 +1,4 @@
-// lib/chatRoomsData.ts - Postatee V2 - Clean
+// lib/chatRoomsData.ts - Postatee V2 - Clean + زخرفة المقاعد + Owner
 export const sudaneseRooms: any[] = []
 
 export const ROOM_DECORATIONS = [
@@ -64,4 +64,51 @@ export const NEW_UPDATE = {
     "🎯 مهام يومية",
     "🧹 حذفنا كل الغرف القديمة - بداية نظيفة",
   ]
+}
+
+// ===== ✅ جديد: زخرفة المقاعد - مربوطة بالمتجر =====
+export const SEAT_FRAMES = [
+  { id: "none", label: "عادي", class: "bg-white/20", price: 0, minLevel: 0 },
+  { id: "gold", label: "👑 ذهبي", class: "bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-[0_0_15px_rgba(234,179,8,0.5)]", price: 500, minLevel: 5 },
+  { id: "fire", label: "🔥 ناري", class: "bg-gradient-to-br from-orange-500 to-red-600 shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse", price: 800, minLevel: 10 },
+  { id: "ice", label: "❄️ ثلجي", class: "bg-gradient-to-br from-cyan-300 to-blue-500 shadow-[0_0_15px_rgba(6,182,212,0.6)]", price: 800, minLevel: 10 },
+  { id: "rainbow", label: "🌈 قوس قزح", class: "bg-gradient-to-br from-pink-500 via-yellow-500 to-green-500 shadow-[0_0_20px_rgba(236,72,153,0.6)]", price: 1500, minLevel: 20 },
+  { id: "diamond", label: "💎 ماسي", class: "bg-gradient-to-br from-white via-cyan-200 to-white shadow-[0_0_20px_rgba(255,255,255,0.8)]", price: 2000, minLevel: 35 },
+  { id: "owner", label: "👑 مالك", class: "bg-gradient-to-br from-yellow-300 via-amber-500 to-yellow-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse", price: 0, minLevel: 0, ownerOnly: true },
+]
+
+// ===== ✅ جديد: ألوان الاسم =====
+export const NAME_COLORS = [
+  { id: "white", label: "أبيض", class: "text-white", price: 0, minLevel: 0 },
+  { id: "gold", label: "ذهبي", class: "text-yellow-400 font-black", price: 300, minLevel: 5 },
+  { id: "green", label: "أخضر نيون", class: "text-[#00E676] font-black", price: 300, minLevel: 5 },
+  { id: "rainbow", label: "قوس قزح", class: "bg-gradient-to-r from-pink-500 via-yellow-400 to-cyan-400 bg-clip-text text-transparent font-black", price: 1000, minLevel: 20 },
+  { id: "owner", label: "👑 مالك", class: "text-yellow-300 font-black drop-shadow-[0_0_8px_rgba(250,204,21,0.9)]", price: 0, minLevel: 0, ownerOnly: true },
+]
+
+// ===== ✅ جديد: صلاحية الأونر - بدون UID =====
+export function isOwner(userProfile: any) {
+  return userProfile?.role === "owner"
+}
+export function isLegend(userProfile: any) {
+  return userProfile?.role === "owner"
+}
+
+// ===== ✅ جديد: دوال مساعدة للزخرفة =====
+export function getSeatFrame(frameId?: string, userProfile?: any) {
+  // الأونر دايماً إطارو ذهبي ملكي
+  if (isOwner(userProfile)) return SEAT_FRAMES.find(f => f.id === "owner")!
+  const f = SEAT_FRAMES.find(f => f.id === frameId)
+  if (!f || (f as any).ownerOnly) return SEAT_FRAMES[0]
+  return f
+}
+export function getNameColor(colorId?: string, userProfile?: any) {
+  if (isOwner(userProfile)) return NAME_COLORS.find(c => c.id === "owner")!
+  const c = NAME_COLORS.find(c => c.id === colorId)
+  if (!c || (c as any).ownerOnly) return NAME_COLORS[0]
+  return c
+}
+export function getOwnerDisplayName(name: string, userProfile?: any) {
+  if (isOwner(userProfile)) return `👑 ${name}`
+  return getDecoratedUserName(name, userProfile?.xp || 0, userProfile?.decorationId)
 }
