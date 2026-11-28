@@ -3,26 +3,26 @@ import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
 import { doc, collection, getDocs, query, where, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { Camera, ArrowLeft, User, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, MessageCircle, Send, Loader2, LogOut, Settings, Shield, HelpCircle } from "lucide-react";
+import { Camera, ArrowLeft, Image as ImageIcon, Crown, Gem, Star, Verified, UserPlus, Check, Clock, X, UserMinus, MessageCircle, Send, Loader2, LogOut, Settings, Shield, HelpCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { processImage } from "@/lib/imageProcessor";
 import Link from "next/link";
 import { useLiveUser } from "@/lib/hooks/useLiveUser";
 
+// ✅ الجدار فقط هو الديفولت - الأفاتار فاضي
 const DEFAULT_COVER = "/default-cover.jpg";
-const DEFAULT_AVATAR = "/default-avatar.png";
 
 const getNameColor = (role:string) => {
   const cleanRole = (role||"").trim();
   if(cleanRole === "مؤسس") return "text-cyan-400";
   if(cleanRole === "شخصية هامة") return "text-red-400";
   if(cleanRole === "شارة خضراء") return "text-green-400";
-  if(cleanRole === "مالك") return "text-violet-400 font-black";
+  if(cleanRole === "مالك" || cleanRole === "owner") return "text-violet-400 font-black";
   return "text-white";
 };
 const RoleBadge = ({ role }: { role: string }) => {
   const cleanRole = (role||"").trim();
-  if (cleanRole === "مالك") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full"><Crown className="w-3 h-3 fill-white"/> المالك</span>;
+  if (cleanRole === "مالك" || cleanRole === "owner") return <span className="inline-flex items-center gap-1 bg-gradient-to-r from-violet-500 to-purple-600 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full"><Crown className="w-3 h-3 fill-white"/> المالك</span>;
   if (cleanRole === "مؤسس") return <span className="inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/50 text-cyan-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Gem className="w-3 h-3"/> مؤسس</span>;
   if (cleanRole === "شخصية هامة") return <span className="inline-flex items-center gap-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[11px] font-black px-2.5 py-0.5 rounded-full"><Star className="w-3 h-3 fill-red-400"/> هامة</span>;
   if (cleanRole === "شارة خضراء") return <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full"><Verified className="w-3 h-3"/> موثق</span>;
@@ -177,6 +177,10 @@ export default function ProfileWall({ uid }: { uid: string }) {
 
   if (!displayUser) return <div className="min-h-screen bg-[#050a0a] flex items-center justify-center text-white">جاري تحميل الحائط...</div>;
   const filteredPosts = posts.filter((p:any)=>{ if(tab==='all') return true; if(tab==='media') return p.image || p.video || p.media; if(tab==='text') return!p.image &&!p.video &&!p.media; return true; });
+  // ✅ لو الأفاتار قديم افتراضي، اعتبرو فاضي
+  const rawAvatar = displayUser.avatar || displayUser.photoURL || displayUser.photo || "";
+  const hasAvatar = rawAvatar && !rawAvatar.includes("default-avatar");
+  const initialLetter = (displayUser.displayName || displayUser.username || "?").charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen bg-[#050a0a] text-white" dir="rtl">
@@ -193,8 +197,12 @@ export default function ProfileWall({ uid }: { uid: string }) {
       <div className="max-w-[600px] mx-auto px-6 relative h-[50px]">
         <div className="absolute -top-12 right-6 flex items-end gap-4 z-20">
           <div className="relative">
-            <div className="w-24 h-24 lg:w-28 lg:h-28 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden shadow-xl">
-              <img src={displayUser.avatar || DEFAULT_AVATAR} className="w-full h-full object-cover" alt="avatar"/>
+            <div className="w-24 h-24 lg:w-28 lg:h-28 rounded-full border-4 border-[#050a0a] bg-[#111] overflow-hidden shadow-xl flex items-center justify-center">
+              {hasAvatar ? (
+                <img src={rawAvatar} className="w-full h-full object-cover" alt="avatar"/>
+              ) : (
+                <div className="w-full h-full bg-[#1a2a2f] flex items-center justify-center text-[36px] font-black text-white/50">{initialLetter}</div>
+              )}
               {uploading==='avatar' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}
             </div>
             {liveUser?.reallyOnline && <span className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 rounded-full border-[3px] border-[#050a0a]"></span>}
